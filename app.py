@@ -13,6 +13,16 @@ BRAND = ROOT / "assets" / "brand"
 st.set_page_config(page_title="Tallisor", page_icon=str(BRAND / "tallisor-mark-64.png"), layout="wide")
 LOGO_B64 = base64.b64encode((BRAND / "tallisor-logo.png").read_bytes()).decode()
 
+from tallisor.workspace import hosted, use_session_root  # noqa: E402  (light import)
+
+HOSTED = hosted()
+if HOSTED:
+    # Shared web server: every visitor gets a private, temporary workspace.
+    import tempfile
+    if "workspace_dir" not in st.session_state:
+        st.session_state.workspace_dir = tempfile.mkdtemp(prefix="tallisor-session-")
+    use_session_root(Path(st.session_state.workspace_dir))
+
 # Show something immediately: the heavy libraries below take a moment on first start.
 _splash = st.empty()
 if "s" not in st.session_state:
@@ -300,6 +310,9 @@ with top_r:
     st.download_button("Excel report", build_workbook(s), key="dl_xlsx", use_container_width=True,
                        file_name=f"tallisor_{r.statement.date}.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+if HOSTED:
+    st.caption("Online demo. Files you upload stay in your browser session only and are deleted when it ends. "
+               "Please use sample or anonymised files, not real customer data.")
 if st.session_state.get("notice"):
     st.info(st.session_state.notice)
 missing = settings.missing_fee_contracts(s.profile, r.providers)
@@ -524,6 +537,49 @@ with tabs[5]:
         st.rerun()
 
 # ------------------------------------------------------------------ settings
+def _ai_settings(owner: bool):
+    md("**AI explanations** (optional)")
+    cap("An AI model writes the explanations in plain language and understands more ways of asking the copilot. "
+        "It never calculates: every amount it writes is checked against your records, and it cannot approve "
+        "fixes or move money. Without it, explanations come from fixed rules.")
+    _cur = from_env()
+    _labels = {"gemini": "Google Gemini (free tier available)", "anthropic": "Anthropic Claude",
+               "openai": "OpenAI"}
+    _links = {"gemini": "https://aistudio.google.com/apikey", "anthropic": "https://console.anthropic.com/settings/keys",
+              "openai": "https://platform.openai.com/api-keys"}
+    h1, h2 = st.columns([1, 2])
+    ai_provider = h1.selectbox("Provider", list(_labels), format_func=_labels.get, disabled=not owner,
+                               index=list(_labels).index(_cur.name) if _cur.name in _labels else 0, key="ai_prov")
+    ai_key = h2.text_input("API key", type="password", disabled=not owner, key="ai_key",
+                           placeholder="Key saved" if _cur.name != "none" else "Paste your key",
+                           help="Stored only on this computer, readable by your user account only.")
+    cap(f"Get a key at {_links[ai_provider]}.")
+    if ai_provider == "gemini":
+        cap("On Gemini's free tier Google may use what is sent to improve its products and people may review it. "
+            "Fine for trying Tallisor; use a paid key for real customer files.")
+    k1, k2, k3, _ = st.columns([1, 1, 1, 2])
+    if k1.button("Save key", disabled=not owner, key="ai_save", use_container_width=True):
+        try:
+            if not ai_key.strip():
+                raise ValueError("Paste your API key first.")
+            save_api_key(ai_provider, ai_key)
+            ok, why = from_env().check()
+            st.session_state.ai_msg = (ok, why if ok else f"Key saved, but the test failed: {why}")
+        except ValueError as exc:
+            st.session_state.ai_msg = (False, str(exc))
+        st.rerun()
+    if k2.button("Test connection", disabled=_cur.name == "none", key="ai_test", use_container_width=True):
+        st.session_state.ai_msg = from_env().check()
+    if k3.button("Remove key", disabled=not owner or _cur.name == "none", key="ai_remove", use_container_width=True):
+        remove_api_key()
+        st.session_state.ai_msg = (True, "Key removed. Explanations now come from fixed rules.")
+        st.rerun()
+    if st.session_state.get("ai_msg"):
+        ok, why = st.session_state.ai_msg
+        (st.success if ok else st.error)(why)
+
+
+
 SAFE_AUTO = ["fee_variance", "fx_difference", "refund_unrecorded", "provider_fee"]
 CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "SGD", "INR", "AED", "HKD", "JPY", "CHF", "SEK", "NZD", "ZAR",
               "BRL", "MXN", "BDT", "PKR", "IDR", "MYR", "PHP", "NGN", "KES"]
@@ -533,7 +589,7 @@ with tabs[6]:
     owner = role == "owner"
     st.subheader("Business settings")
     cap("These settings are used when you upload your own files. The sample companies keep their own settings. "
-        f"Saved on this computer in {settings.path()}.")
+        + ("" if HOSTED else f"Saved on this computer in {settings.path()}."))
     if not owner:
         st.info("Only the owner can change settings.")
     biz, cash = prof["business"], prof["cash"]
@@ -626,45 +682,12 @@ with tabs[6]:
     limit = g3.number_input("Up to amount", 0.0, 1000.0, rule.get("max_amount", 2000) / 100, step=5.0,
                             disabled=not owner, key="set_auto_max")
 
-    md("**AI explanations** (optional)")
-    cap("An AI model writes the explanations in plain language and understands more ways of asking the copilot. "
-        "It never calculates: every amount it writes is checked against your records, and it cannot approve "
-        "fixes or move money. Without it, explanations come from fixed rules.")
-    _cur = from_env()
-    _labels = {"gemini": "Google Gemini (free tier available)", "anthropic": "Anthropic Claude",
-               "openai": "OpenAI"}
-    _links = {"gemini": "https://aistudio.google.com/apikey", "anthropic": "https://console.anthropic.com/settings/keys",
-              "openai": "https://platform.openai.com/api-keys"}
-    h1, h2 = st.columns([1, 2])
-    ai_provider = h1.selectbox("Provider", list(_labels), format_func=_labels.get, disabled=not owner,
-                               index=list(_labels).index(_cur.name) if _cur.name in _labels else 0, key="ai_prov")
-    ai_key = h2.text_input("API key", type="password", disabled=not owner, key="ai_key",
-                           placeholder="Key saved" if _cur.name != "none" else "Paste your key",
-                           help="Stored only on this computer, readable by your user account only.")
-    cap(f"Get a key at {_links[ai_provider]}.")
-    if ai_provider == "gemini":
-        cap("On Gemini's free tier Google may use what is sent to improve its products and people may review it. "
-            "Fine for trying Tallisor; use a paid key for real customer files.")
-    k1, k2, k3, _ = st.columns([1, 1, 1, 2])
-    if k1.button("Save key", disabled=not owner, key="ai_save", use_container_width=True):
-        try:
-            if not ai_key.strip():
-                raise ValueError("Paste your API key first.")
-            save_api_key(ai_provider, ai_key)
-            ok, why = from_env().check()
-            st.session_state.ai_msg = (ok, why if ok else f"Key saved, but the test failed: {why}")
-        except ValueError as exc:
-            st.session_state.ai_msg = (False, str(exc))
-        st.rerun()
-    if k2.button("Test connection", disabled=_cur.name == "none", key="ai_test", use_container_width=True):
-        st.session_state.ai_msg = from_env().check()
-    if k3.button("Remove key", disabled=not owner or _cur.name == "none", key="ai_remove", use_container_width=True):
-        remove_api_key()
-        st.session_state.ai_msg = (True, "Key removed. Explanations now come from fixed rules.")
-        st.rerun()
-    if st.session_state.get("ai_msg"):
-        ok, why = st.session_state.ai_msg
-        (st.success if ok else st.error)(why)
+    if HOSTED:
+        md("**AI explanations**")
+        cap("AI explanations are " + ("on for this demo." if from_env().name != "none" else "off for this demo.")
+            + " In your own installation you can connect your own AI provider here.")
+    else:
+        _ai_settings(owner)
 
     if st.button("Save settings", type="primary", disabled=not owner, key="set_save"):
         try:
@@ -685,7 +708,8 @@ with tabs[6]:
 # ------------------------------------------------------------------ history
 with tabs[7]:
     st.subheader("Saved runs")
-    cap("Every run on your own files is saved with the exact files, settings, decisions and audit log. Opening a "
+    cap(("In this online demo, runs are kept only for your browser session. " if HOSTED else "")
+        + "Every run on your own files is saved with the exact files, settings, decisions and audit log. Opening a "
         "run recalculates it and re-applies your decisions only where the fix is unchanged.")
     runs = store.list_runs()
     if not runs:

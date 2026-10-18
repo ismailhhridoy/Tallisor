@@ -146,3 +146,17 @@ def test_reopen_with_new_settings_skips_decisions_whose_fix_changed(session):
     assert [d["ref"] for d in report["skipped"]] == ["NW-48240"]
     historical, _ = store.open_run(run_id)
     assert historical.recon.case("NW-48240").status == "approved"
+
+
+def test_hosted_sessions_get_separate_workspaces(tmp_path):
+    import contextvars
+    from tallisor import workspace
+
+    def visitor(name):
+        workspace.use_session_root(tmp_path / name)
+        settings.save(settings.default_profile(name))
+        return workspace.root(), settings.load()["business"]["name"]
+
+    a = contextvars.copy_context().run(visitor, "Visitor A")
+    b = contextvars.copy_context().run(visitor, "Visitor B")
+    assert a[0] != b[0] and a[1] == "Visitor A" and b[1] == "Visitor B"

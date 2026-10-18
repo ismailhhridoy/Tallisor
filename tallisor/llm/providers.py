@@ -177,7 +177,8 @@ def _dotenv() -> dict:
 
 
 def _workspace_env() -> Path:
-    return Path(os.getenv("TALLISOR_WORKSPACE", Path.home() / ".tallisor")).expanduser() / ".env"
+    from ..workspace import root
+    return root() / ".env"
 
 
 def save_api_key(provider: str, key: str) -> None:

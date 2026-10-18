@@ -61,6 +61,21 @@ Restart the app and the sidebar shows "AI writing: on". The provider is picked f
 
 Whatever the model writes, the categories, amounts and fixes still come from code, and any explanation containing an amount that is not in the evidence is rejected.
 
+## Put it online
+
+The app is ready for [Streamlit Community Cloud](https://share.streamlit.io) (free):
+
+1. Sign in at share.streamlit.io with GitHub and click **Create app**.
+2. Repository `ismailhhridoy/Tallisor`, branch `main`, main file `app.py`. Under advanced settings choose Python 3.12.
+3. In **Secrets**, add:
+   ```toml
+   TALLISOR_HOSTED = "1"
+   GEMINI_API_KEY = "your key"     # optional; or ANTHROPIC_API_KEY / OPENAI_API_KEY
+   ```
+4. Deploy. The app gets a `https://<name>.streamlit.app` address.
+
+`TALLISOR_HOSTED=1` turns on hosted mode: each visitor gets a private temporary workspace (uploads, settings, history and mappings are never shared between visitors and disappear when the session ends), the AI key comes only from the server's secrets, and a notice asks visitors to use sample or anonymised files. This is a public demo, not a multi-customer service: there are no accounts and nothing is stored after a session.
+
 ## How it works
 
 ```
