@@ -186,11 +186,14 @@ with st.sidebar:
     if llm_name == "none":
         cap("AI writing: off. Explanations come from fixed rules, so results are exact and identical every run.")
         with st.expander("Turn on AI explanations"):
-            cap("Copy .env.example to .env in the project folder, add one API key (Anthropic, OpenAI or Gemini) "
+            cap("Copy .env.example to .env in the project folder, add one API key (free: Gemini; paid: Anthropic or OpenAI) "
                 "and restart the app. The AI only writes the wording; every amount it states is checked against "
                 "the records, and it can never approve fixes or move money.")
     else:
         cap(f"AI writing: on ({llm_name}, {from_env().model}). Every amount it writes is checked against the records.")
+        if llm_name == "gemini":
+            cap("If this is a free Gemini key, Google may use what is sent to improve its products. Use it with "
+                "sample data; use a paid key for real customer files.")
     if st.button("Test AI connection", key="ai_test", use_container_width=True):
         ok, why = from_env().check()
         (st.success if ok else st.error)(why)

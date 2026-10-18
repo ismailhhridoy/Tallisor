@@ -55,6 +55,8 @@ cp .env.example .env
 # then edit .env:  ANTHROPIC_API_KEY=...   (or OPENAI_API_KEY / GEMINI_API_KEY)
 ```
 
+For a free option, use a Gemini key from [Google AI Studio](https://aistudio.google.com/apikey) (default model `gemini-3.8-flash`). On Gemini's free tier Google may use prompts to improve its products and people may review them, so use it with the sample data and switch to a paid key before processing real customer data.
+
 Restart the app and the sidebar shows "AI writing: on". The provider is picked from whichever key is present; `TALLISOR_LLM_PROVIDER` and `TALLISOR_LLM_MODEL` override it. `.env` is in `.gitignore` and is never uploaded.
 
 Whatever the model writes, the categories, amounts and fixes still come from code, and any explanation containing an amount that is not in the evidence is rejected.
