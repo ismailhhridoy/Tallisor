@@ -1,0 +1,18 @@
+{
+  "business": {"name": "Kestrel Goods", "country": "Fictional", "months_trading": 8, "reporting_currency": "USD",
+               "revenue_variation_estimate": 0.25, "dispute_rate_estimate": 0.004, "card_share_estimate": 0.8},
+  "sales_date": "2026-10-09",
+  "files": {"books": "books.csv", "processors": ["stripe_itemized_balance.csv", "paypal_activity.csv"],
+            "bank": "bank_statement.mt940"},
+  "fee_schedules": {
+    "Stripe": {"home_country": "US", "domestic": {"bp": 290, "fixed": 30}, "international": {"bp": 440, "fixed": 30}},
+    "PayPal": {"domestic": {"bp": 349, "fixed": 49}}
+  },
+  "cash": {
+    "weeks": 13, "floor": 50000, "weekly_sales": 210000,
+    "payments": [
+      {"name": "Rent", "amount": 15000, "monthly_day": 1},
+      {"name": "Supplier payments", "amount": 120000, "every_days": 7, "first": "2026-10-15"}
+    ]
+  }
+}

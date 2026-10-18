@@ -22,7 +22,7 @@ Requires Python 3.10 or newer.
 git clone <this repository>
 cd mismatch-desk
 python -m pip install -r requirements.txt
-python -m pytest -q                 # 43 tests
+python -m pytest -q                 # 65 tests
 python -m mismatchdesk eval         # scored evaluation, writes evidence/
 python -m streamlit run app.py      # web app at http://localhost:8501
 ```
@@ -105,6 +105,18 @@ Full detail: [`docs/SECURITY_SELF_ASSESSMENT.md`](docs/SECURITY_SELF_ASSESSMENT.
 - 14 of 14 attacks blocked (attack success rate 0%)
 - Audit log verifies; the deliberately tampered copy is rejected
 
+## Using it on your own files
+
+1. **Upload** your sales export, one report per payment provider and your bank statement. Stripe itemised balance reports, PayPal activity downloads, CAMT.053 XML, MT940 and bank CSVs (single amount, or debit and credit columns) are read directly. Decimal commas (`1.234,56`) and day-first dates are handled. Open invoices and weekly sales history are optional; templates are in the sidebar.
+2. **Unknown layout?** A file from a provider it has not seen opens a mapping screen with its best guess for each column, fee sign, date order and transaction types. Confirm once; the mapping is saved and the next file with those columns is read automatically.
+3. **Settings** (owner only): business name and currency, fee contract per provider (domestic and international rates, home country), safety floor, regular payments (weekly, every two weeks, monthly, once), estimates used when there is no sales history. A provider with no contract on file has its fees accepted as charged, and a banner says so, rather than every sale being flagged.
+4. **Review** the differences and approve fixes as before.
+5. **History**: every run on your own files is saved with the exact files, settings, decisions and audit log. Uploading the same files again continues the saved run with your current settings; opening a run from History shows it as it was. A saved decision is re-applied only if the fix is byte-for-byte unchanged (same proposal id); otherwise it comes back for review.
+6. **Excel report**: Summary, Differences, Journal, Cash forecast, Alerts, Financing and Audit log sheets, amounts as numbers with SUM cross-checks.
+7. **Auto-approval rule** (off by default, owner only): approve high-confidence fixes in chosen categories (fee, FX, unrecorded refund, provider charge) at or under an amount. It acts in the owner's name, never the agent's; each approval is logged with the rule and who set it; it skips anything with a security flag and stops with the kill switch.
+
+Your data stays on your computer, in `~/.mismatchdesk` (set `MD_WORKSPACE` to use another folder).
+
 ## Repository layout
 
 ```
@@ -121,21 +133,26 @@ mismatchdesk/          engine
   agent.py             chat copilot (intent, plan, execute)
   session.py           workflow, permissions, audit trail
   evaluate.py          scored evaluation and attack suite
+  mapping.py           column mapping for file layouts it has not seen
+  settings.py          business settings (fee contracts, cash plan, rules)
+  store.py             saved runs, decisions and audit logs (SQLite index)
+  report.py            Excel workbook of a run
 app.py                 web app
 data/                  illustrative financing facility types
 sample_data/northwind/ sandbox company (fictional) and its answer key
+sample_data/realformats/ Stripe itemised balance, PayPal activity and MT940 layouts, with answer key
 scripts/make_sample.py regenerates the sandbox data
-tests/                 43 tests
+tests/                 65 tests
 evidence/              evaluation report, audit logs, transcript, approved journal
 docs/                  technical documentation and security self-assessment
 ```
 
 ## Limits and honest notes
 
-- All companies, payment providers (PayRail, Swiftpay) and banks in the sample are fictional. Real provider formats need their own adapters.
+- All companies in the samples are fictional. PayRail and Swiftpay are fictional providers; the Stripe, PayPal and MT940 sample files follow those formats' published layouts but contain made-up data. Real exports vary by account settings, which is what the mapping step is for.
 - Financing products are generic facility types with illustrative terms, not real offers. Recommending real lenders is regulated in several countries; the product stays informational.
 - The forecast is a simple direct method (8-week average sales, scheduled payments, invoices on their due date).
-- The web demo uses the sample company's cash plan, invoices and fee contracts when you upload your own files.
+- Single user on one computer. There are no logins, shared workspaces or hosted version yet; the role selector is for showing the permission model, not access control.
 - Only the deterministic path has been evaluated. Model-written explanations depend on the provider configured.
 
 License: MIT.

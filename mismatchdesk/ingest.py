@@ -1,8 +1,23 @@
 """Read books, payment-provider reports and bank statements into normalised records.
 
-Provider formats are described by small JSON adapters in ./adapters, so adding a
-new provider is a configuration change, not new code. Adapters are picked by
-matching the file's header row against each adapter's signature.
+Provider formats are described by small JSON adapters, so adding a provider is
+a configuration change, not new code. Built-in adapters live in ./adapters;
+adapters a user creates with the column-mapping step are saved in the
+workspace (see workspace.py) and loaded alongside them. An adapter is picked
+by matching the file's header row against each adapter's signature.
+
+Adapter options (all optional except columns/signature):
+  columns          normalised field -> source column, or a list of fallbacks
+  kind_map         exact source type -> normalised kind
+  kind_contains    [[substring, kind], ...] checked in order, case-insensitive
+  status_column / failed_statuses   rows with these statuses become 'failed'
+  fee_sign         positive (fee shown as a cost) | negative (fee shown as -x)
+  payout_sign      negative (payout reduces the balance) | positive
+  date_formats     list of strptime formats, tried in order
+  payouts_from_group {"id": col, "date": col}: build payout rows by summing
+                   transactions that share a payout id (reports without payout rows)
+  payout_arrival_days  arrival = transaction date + N days when not stated
+  derive_rate      compute the exchange rate from gross / customer amount
 
 All uploaded content is treated as untrusted:
   * size and row caps (protects against resource exhaustion, OWASP LLM10)
@@ -14,7 +29,9 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterable, Union
 
@@ -34,6 +51,14 @@ class InputRejected(ValueError):
     """Raised when an input file is refused for safety or format reasons."""
 
 
+class UnknownFormat(InputRejected):
+    """No adapter recognises the file. Carries what the mapping step needs."""
+
+    def __init__(self, name: str, role: str, header: list[str], sample: list[dict]):
+        super().__init__(f"{name}: no adapter recognises these columns: {', '.join(header)}")
+        self.name, self.role, self.header, self.sample = name, role, header, sample
+
+
 def _read(source: Source) -> tuple[str, str]:
     if isinstance(source, tuple):
         name, data = source
@@ -44,128 +69,233 @@ def _read(source: Source) -> tuple[str, str]:
         name, data = path.name, path.read_bytes()
     if len(data) > MAX_BYTES:
         raise InputRejected(f"{name}: file larger than {MAX_BYTES // 1024 // 1024} MB")
-    try:
-        text = data.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise InputRejected(f"{name}: not UTF-8 text") from exc
-    return name, text
+    for encoding in ("utf-8-sig", "cp1252"):   # many bank exports are Windows-1252
+        try:
+            return name, data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise InputRejected(f"{name}: not a text file")
+
+
+def _adapter_dirs() -> list[Path]:
+    from .workspace import adapters_dir
+    return [ADAPTER_DIR, adapters_dir()]
 
 
 def load_adapters(role: str | None = None) -> list[dict]:
-    adapters = []
-    for path in sorted(ADAPTER_DIR.glob("*.json")):
-        cfg = json.loads(path.read_text())
-        cfg["_id"] = path.stem
-        if role is None or cfg.get("role") == role:
-            adapters.append(cfg)
+    adapters, seen = [], set()
+    for folder in _adapter_dirs():
+        if not folder.exists():
+            continue
+        for path in sorted(folder.glob("*.json")):
+            try:
+                cfg = json.loads(path.read_text())
+            except json.JSONDecodeError:
+                continue
+            cfg["_id"] = path.stem
+            cfg["_custom"] = folder != ADAPTER_DIR
+            if path.stem in seen:
+                continue
+            seen.add(path.stem)
+            if role is None or cfg.get("role") == role:
+                adapters.append(cfg)
     return adapters
 
 
 def _rows(name: str, text: str) -> tuple[list[str], list[dict]]:
-    reader = csv.DictReader(io.StringIO(text))
+    sample = text[:4096]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+        delimiter = dialect.delimiter
+    except csv.Error:
+        delimiter = ","
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     header = [h.strip() for h in (reader.fieldnames or [])]
     rows = []
     for i, row in enumerate(reader):
         if i >= MAX_ROWS:
             raise InputRejected(f"{name}: more than {MAX_ROWS} rows")
-        rows.append({(k or "").strip(): (v or "").strip() for k, v in row.items()})
+        rows.append({(k or "").strip(): (v or "").strip() for k, v in row.items() if k is not None})
     if not header:
         raise InputRejected(f"{name}: no header row")
     return header, rows
 
 
-def detect_adapter(header: Iterable[str], role: str) -> dict:
+def detect_adapter(header: Iterable[str], role: str, name: str = "file", rows=None) -> dict:
     header_set = set(header)
-    for cfg in load_adapters(role):
+    # custom adapters first: a user's own mapping wins over a built-in guess
+    for cfg in sorted(load_adapters(role), key=lambda c: not c.get("_custom")):
         if set(cfg["signature"]).issubset(header_set):
             return cfg
-    raise InputRejected(f"no adapter recognises these columns: {', '.join(header)}")
+    raise UnknownFormat(name, role, list(header), (rows or [])[:200])
 
 
-def _iso_date(raw: str, fmt: str | None) -> str:
+def _iso_date(raw: str, formats=None) -> str:
     if not raw:
         return ""
-    if fmt:
-        try:
-            return datetime.strptime(raw, fmt).isoformat(sep=" ")
-        except ValueError:
-            pass
-    for guess in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
-        try:
-            return datetime.strptime(raw, guess).isoformat(sep=" ")
-        except ValueError:
-            continue
+    raw = raw.strip()
+    candidates = [raw, raw[:19], raw[:16], raw[:10]]   # tolerate trailing seconds, zones, "Z"
+    for fmt in list(formats or []) + ["%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M",
+                                       "%Y-%m-%d", "%d/%m/%Y %H:%M", "%d/%m/%Y", "%d.%m.%Y"]:
+        for text in candidates:
+            try:
+                return datetime.strptime(text, fmt).isoformat(sep=" ")
+            except ValueError:
+                continue
     return raw
+
+
+def _col(row: dict, spec) -> str:
+    """Value of the first listed column that is present and non-empty."""
+    if not spec:
+        return ""
+    for name in ([spec] if isinstance(spec, str) else spec):
+        value = row.get(name, "")
+        if value != "":
+            return value
+    return ""
 
 
 # ---------------------------------------------------------------- books
 
-def load_books(source: Source) -> list[BookEntry]:
+PAID_WORDS = {"paid", "completed", "complete", "settled", "succeeded", "success", "successful", "captured",
+              "closed", "fulfilled"}
+
+
+def _book_status(raw: str, cfg: dict) -> str:
+    """Sales exports say 'Paid', 'Completed', 'Settled'... The engine needs 'paid'."""
+    low = (raw or "paid").strip().lower()
+    if low in {w.lower() for w in cfg.get("paid_statuses", [])} or low in PAID_WORDS:
+        return "paid"
+    return low
+
+
+def load_books(source: Source, adapter: dict | None = None) -> list[BookEntry]:
     name, text = _read(source)
     header, rows = _rows(name, text)
-    cfg = detect_adapter(header, "books")
+    cfg = adapter or detect_adapter(header, "books", name, rows)
     col = cfg["columns"]
     entries = []
     for line_no, row in enumerate(rows, start=2):
+        if not any(row.values()):
+            continue
         try:
-            amount = to_cents(row[col["amount"]])
-            amount_usd = to_cents(row.get(col["amount_usd"]) or row[col["amount"]])
+            amount = to_cents(_col(row, col["amount"]))
+            amount_usd = to_cents(_col(row, col.get("amount_usd")) or _col(row, col["amount"]))
         except (KeyError, MoneyParseError) as exc:
             raise InputRejected(f"{name} line {line_no}: {exc}") from exc
         entries.append(BookEntry(
-            ref=row[col["ref"]],
-            date=row.get(col["date"], ""),
-            customer=row.get(col["customer"], ""),
-            channel=row.get(col["channel"], ""),
-            currency=(row.get(col["currency"]) or "USD").upper(),
+            ref=_col(row, col["ref"]),
+            date=_iso_date(_col(row, col.get("date")), cfg.get("date_formats"))[:10],
+            customer=_col(row, col.get("customer")),
+            channel=_col(row, col.get("channel")) or cfg.get("default_channel", ""),
+            currency=(_col(row, col.get("currency")) or "USD").upper(),
             amount=amount,
             amount_usd=amount_usd,
-            fx_rate=row.get(col["fx_rate"]) or None,
-            status=(row.get(col["status"]) or "paid").lower(),
+            fx_rate=_col(row, col.get("fx_rate")) or None,
+            status=_book_status(_col(row, col.get("status")), cfg),
         ))
     return entries
 
 
 # ---------------------------------------------------------------- processors
 
-def load_processor(source: Source) -> tuple[list[PspTxn], dict]:
+def _kind(cfg: dict, row: dict) -> str:
+    col = cfg["columns"]
+    status_col = cfg.get("status_column")
+    if status_col and row.get(status_col, "").strip().lower() in {s.lower() for s in cfg.get("failed_statuses", [])}:
+        return "failed"
+    raw = _col(row, col.get("kind"))
+    if not raw and cfg.get("default_kind"):
+        # No type column: positive amounts are sales, negative ones refunds.
+        try:
+            return cfg["default_kind"] if to_cents(_col(row, col.get("gross")) or "0") >= 0 else "refund"
+        except MoneyParseError:
+            return cfg["default_kind"]
+    kinds = cfg.get("kind_map", {})
+    if raw in kinds:
+        return kinds[raw]
+    if raw.upper() in kinds:
+        return kinds[raw.upper()]
+    low = raw.lower()
+    for needle, kind in cfg.get("kind_contains", []):
+        if needle.lower() in low:
+            return kind
+    return "adjustment"
+
+
+def load_processor(source: Source, adapter: dict | None = None) -> tuple[list[PspTxn], dict]:
     name, text = _read(source)
     header, rows = _rows(name, text)
-    cfg = detect_adapter(header, "processor")
-    col, kinds = cfg["columns"], cfg["kind_map"]
+    cfg = adapter or detect_adapter(header, "processor", name, rows)
+    col = cfg["columns"]
+    formats = cfg.get("date_formats") or ([cfg["date_format"]] if cfg.get("date_format") else None)
+    group = cfg.get("payouts_from_group")
     txns = []
     for line_no, row in enumerate(rows, start=2):
-        get = lambda key: row.get(col.get(key, ""), "")  # noqa: E731
-        raw_kind = get("kind")
-        kind = kinds.get(raw_kind, kinds.get(raw_kind.upper(), "adjustment"))
+        if not any(row.values()):
+            continue
+        get = lambda key: _col(row, col.get(key))  # noqa: E731
+        kind = _kind(cfg, row)
         try:
             gross = to_cents_or_zero(get("gross"))
-            fee = abs(to_cents_or_zero(get("fee")))
-            net = to_cents(get("net"))
+            fee_raw = to_cents_or_zero(get("fee"))
+            fee = -fee_raw if cfg.get("fee_sign") == "negative" else fee_raw
+            net_text = get("net")
+            net = to_cents(net_text) if net_text else gross - fee
         except MoneyParseError as exc:
             raise InputRejected(f"{name} line {line_no}: {exc}") from exc
-        if kind == "payout" and cfg.get("payout_sign") == "positive":
+        if kind == "failed":
+            net = 0
+        if kind == "payout" and cfg.get("payout_sign") in ("positive", "auto"):
             net, gross = -abs(net), -abs(gross or net)
+        ts = _iso_date(get("ts"), formats)
+        arrival = _iso_date(get("arrival_date"), formats)[:10]
+        if kind == "payout" and not arrival and cfg.get("payout_arrival_days") is not None and ts:
+            arrival = (datetime.fromisoformat(ts[:10]) + timedelta(days=cfg["payout_arrival_days"])).date().isoformat()
+        payout_id = get("payout_id") or (row.get(group["id"], "") if group else "")
+        if kind == "payout" and not payout_id:
+            payout_id = get("txn_id")
+        rate = get("exchange_rate") or None
+        orig_cur, orig_amt = (get("original_currency") or "").upper(), to_cents_or_zero(get("original_amount"))
+        if not rate and cfg.get("derive_rate") and orig_amt and orig_cur and orig_cur != (get("currency") or "").upper():
+            try:
+                rate = str((Decimal(gross) / Decimal(orig_amt)).quantize(Decimal("0.0001")))
+            except (InvalidOperation, ZeroDivisionError):
+                rate = None
         txns.append(PspTxn(
-            provider=cfg["provider"],
-            txn_id=get("txn_id"),
-            ts=_iso_date(get("ts"), cfg.get("date_format")),
-            kind=kind,
-            ref=get("ref"),
-            gross=gross,
-            fee=fee,
-            net=net,
-            currency=(get("currency") or "USD").upper(),
-            exchange_rate=get("exchange_rate") or None,
-            card_country=get("card_country"),
-            payout_id=get("payout_id"),
-            arrival_date=_iso_date(get("arrival_date"), None)[:10],
-            memo=get("memo"),
-            evidence_due=get("evidence_due"),
-            original_currency=(get("original_currency") or "").upper(),
-            original_amount=to_cents_or_zero(get("original_amount")),
+            provider=cfg.get("provider") or cfg.get("name", "Provider"),
+            txn_id=get("txn_id"), ts=ts, kind=kind, ref=get("ref"),
+            gross=gross, fee=fee, net=net,
+            currency=(get("currency") or "USD").upper(), exchange_rate=rate,
+            card_country=get("card_country").upper(), payout_id=payout_id, arrival_date=arrival,
+            memo=get("memo"), evidence_due=_iso_date(get("evidence_due"), formats)[:10],
+            original_currency=orig_cur, original_amount=orig_amt,
         ))
+    if group:
+        txns.extend(_payouts_from_groups(txns, rows, group, cfg, formats))
     return txns, cfg
+
+
+def _payouts_from_groups(txns, rows, group, cfg, formats) -> list[PspTxn]:
+    existing = {t.payout_id for t in txns if t.kind == "payout"}
+    dates = {}
+    for row in rows:
+        pid = row.get(group["id"], "")
+        if pid and group.get("date"):
+            dates[pid] = _iso_date(row.get(group["date"], ""), formats)[:10]
+    totals: dict[str, int] = {}
+    for t in txns:
+        if t.payout_id and t.kind != "payout":
+            totals[t.payout_id] = totals.get(t.payout_id, 0) + t.net
+    out = []
+    for pid, total in totals.items():
+        if pid in existing:
+            continue
+        out.append(PspTxn(provider=cfg.get("provider", "Provider"), txn_id=pid, ts=dates.get(pid, ""),
+                          kind="payout", ref="", gross=-total, fee=0, net=-total, payout_id=pid,
+                          arrival_date=dates.get(pid, "")))
+    return out
 
 
 # ---------------------------------------------------------------- bank
@@ -235,22 +365,96 @@ def _load_camt053(name: str, text: str) -> tuple[list[BankTxn], Statement]:
     return txns, Statement(account=account, date=date, opening_balance=opening, closing_balance=closing)
 
 
-def load_bank(source: Source) -> tuple[list[BankTxn], Statement]:
+_MT940_61 = re.compile(r"^(\d{6})(\d{4})?(R?[CD])([A-Z])?([\d,]+)N?(\w{3})?(.*)$")
+
+
+def _mt940_amount(text: str) -> int:
+    return to_cents(text.replace(",", "."))
+
+
+def _mt940_balance(value: str) -> tuple[int, str]:
+    # e.g. C261010USD18400,00
+    m = re.match(r"^([CD])(\d{6})([A-Z]{3})([\d,]+)$", value.strip())
+    if not m:
+        return 0, ""
+    sign = 1 if m.group(1) == "C" else -1
+    d = datetime.strptime(m.group(2), "%y%m%d").date().isoformat()
+    return sign * _mt940_amount(m.group(4)), d
+
+
+def _load_mt940(name: str, text: str) -> tuple[list[BankTxn], Statement]:
+    """SWIFT MT940 customer statement: :60F: opening, :61: entries, :86: details, :62F: closing."""
+    fields, current = [], None
+    for line in text.splitlines():
+        m = re.match(r"^:(\d{2}[A-Z]?):(.*)$", line)
+        if m:
+            current = [m.group(1), m.group(2)]
+            fields.append(current)
+        elif current is not None and not line.startswith("-}"):
+            current[1] += "\n" + line
+    txns, opening, closing, date, account = [], 0, 0, "", ""
+    for i, (tag, value) in enumerate(fields):
+        if tag == "25":
+            account = value.strip()
+        elif tag in ("60F", "60M"):
+            opening, _ = _mt940_balance(value)
+        elif tag in ("62F", "62M"):
+            closing, date = _mt940_balance(value)
+        elif tag == "61":
+            first = value.split("\n")[0]
+            m = _MT940_61.match(first)
+            if not m:
+                raise InputRejected(f"{name}: unreadable :61: line")
+            vdate = datetime.strptime(m.group(1), "%y%m%d").date().isoformat()
+            amount = _mt940_amount(m.group(5))
+            if m.group(3) in ("D", "RC"):
+                amount = -amount
+            rest = m.group(7) or ""          # customer reference, then //bank reference
+            ref = rest.split("//")[0]
+            details = fields[i + 1][1].replace("\n", " ").strip() if i + 1 < len(fields) and fields[i + 1][0] == "86" else ""
+            txns.append(BankTxn(txn_id=f"M{len(txns) + 1}", date=vdate, amount=amount,
+                                reference=ref.strip(), remittance_info=details))
+            if len(txns) > MAX_ROWS:
+                raise InputRejected(f"{name}: too many entries")
+    if not txns and not closing:
+        raise InputRejected(f"{name}: not an MT940 statement")
+    return txns, Statement(account=account, date=date, opening_balance=opening, closing_balance=closing)
+
+
+def load_bank(source: Source, adapter: dict | None = None) -> tuple[list[BankTxn], Statement]:
     name, text = _read(source)
-    if text.lstrip().startswith("<"):
+    stripped = text.lstrip()
+    if stripped.startswith("<"):
         return _load_camt053(name, text)
+    if ":20:" in text[:2000] and ":61:" in text:
+        return _load_mt940(name, text)
     header, rows = _rows(name, text)
-    cfg = detect_adapter(header, "bank")
+    cfg = adapter or detect_adapter(header, "bank", name, rows)
     col = cfg["columns"]
+    formats = cfg.get("date_formats")
     txns = []
     for i, row in enumerate(rows, start=1):
+        if not any(row.values()):
+            continue
+        try:
+            if col.get("amount"):
+                amount = to_cents(_col(row, col["amount"]))
+            else:
+                amount = to_cents_or_zero(_col(row, col.get("credit"))) - abs(to_cents_or_zero(_col(row, col.get("debit"))))
+        except MoneyParseError as exc:
+            raise InputRejected(f"{name} line {i + 1}: {exc}") from exc
         txns.append(BankTxn(
-            txn_id=row.get(col["txn_id"]) or f"L{i}",
-            date=row.get(col["date"], ""),
-            amount=to_cents(row[col["amount"]]),
-            reference=row.get(col["reference"], ""),
-            remittance_info=row.get(col["remittance_info"], ""),
+            txn_id=_col(row, col.get("txn_id")) or f"L{i}",
+            date=_iso_date(_col(row, col.get("date")), formats)[:10],
+            amount=amount,
+            reference=_col(row, col.get("reference")),
+            remittance_info=_col(row, col.get("remittance_info")),
         ))
     dates = sorted(t.date for t in txns if t.date)
+    closing = None
+    if col.get("balance"):
+        last = [r for r in rows if _col(r, col["balance"])]
+        if last:
+            closing = to_cents_or_zero(_col(last[-1], col["balance"]))
     return txns, Statement(account="", date=dates[-1] if dates else "",
-                           opening_balance=0, closing_balance=sum(t.amount for t in txns))
+                           opening_balance=0, closing_balance=closing if closing is not None else sum(t.amount for t in txns))

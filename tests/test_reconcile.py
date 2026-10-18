@@ -7,6 +7,11 @@ def test_money_parsing_is_exact():
     assert to_cents("(45.00)") == -4500
     assert to_cents("−5.10") == -510
     assert to_cents("0.005") == 1          # half up
+    assert to_cents("10,00") == 1000       # decimal comma
+    assert to_cents("1.234,56") == 123456
+    assert to_cents("-0,5") == -50
+    assert to_cents("1,000") == 100000     # thousands comma stays thousands
+    assert to_cents("1,234,567.89") == 123456789
     assert fee_cents(124000, 440, 30) == 5486
     assert fmt(-62750) == "−$627.50"
 

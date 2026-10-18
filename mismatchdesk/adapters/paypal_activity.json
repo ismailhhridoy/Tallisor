@@ -1,0 +1,32 @@
+{
+  "name": "PayPal activity download",
+  "provider": "PayPal",
+  "role": "processor",
+  "description": "PayPal Activity > Statements > Activity download (CSV, all transactions). Fees are shown as negative numbers; withdrawals to the bank become payouts. Dates are month-first for US accounts; change date_formats for day-first accounts. Built from PayPal's documented columns; check against your own export.",
+  "signature": ["Transaction ID", "Type", "Gross", "Fee", "Net"],
+  "columns": {
+    "txn_id": "Transaction ID",
+    "ts": "Date",
+    "kind": "Type",
+    "ref": ["Invoice Number", "Custom Number", "Reference Txn ID"],
+    "gross": "Gross",
+    "fee": "Fee",
+    "net": "Net",
+    "currency": "Currency",
+    "memo": ["Note", "Item Title", "Name"]
+  },
+  "kind_contains": [
+    ["refund", "refund"],
+    ["reversal", "adjustment"],
+    ["chargeback", "dispute"],
+    ["withdraw", "payout"],
+    ["transfer to bank", "payout"],
+    ["payment", "charge"]
+  ],
+  "status_column": "Status",
+  "failed_statuses": ["Denied", "Failed", "Voided"],
+  "fee_sign": "negative",
+  "payout_sign": "negative",
+  "date_formats": ["%m/%d/%Y"],
+  "payout_arrival_days": 2
+}

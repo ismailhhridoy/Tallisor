@@ -1,0 +1,4 @@
+"Date","Time","TimeZone","Name","Type","Status","Currency","Gross","Fee","Net","From Email Address","Transaction ID","Reference Txn ID","Invoice Number","Balance"
+"10/09/2026","10:15:00","PDT","Ada Lee","Express Checkout Payment","Completed","USD","60.00","-2.58","57.42","ada@example.com","7AB12345CD678901E","","ORD-1004","57.42"
+"10/09/2026","11:00:00","PDT","Tom Ray","Express Checkout Payment","Denied","USD","40.00","0.00","40.00","tom@example.com","9XY23456EF789012G","","ORD-1005","57.42"
+"10/09/2026","18:00:00","PDT","","General Withdrawal","Completed","USD","-57.42","0.00","-57.42","","4WD34567GH890123J","","","0.00"

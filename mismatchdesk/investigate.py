@@ -54,6 +54,8 @@ def template(case: Case) -> str:
         return f"The books show {case.ref} as paid, but no provider has any payment for it."
     if c == "unrecorded_sale":
         return f"{case.provider} collected {fmt(m['gross'])} for reference {case.ref}, but the sale is missing from the books."
+    if c == "provider_fee":
+        return f"{case.provider} deducted {fmt(m['fee_total'])} that is not linked to any sale, such as an account or service fee."
     if c == "payout_in_transit":
         return f"{case.provider} sent a payout of {fmt(m['amount'])} that has not reached the bank yet. It is due on {m['arrival_date']}."
     if c == "payout_overdue":

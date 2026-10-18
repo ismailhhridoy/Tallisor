@@ -1,0 +1,10 @@
+{
+  "note": "Answer key for the real-format sample (fictional business, fictional transactions in Stripe-style, PayPal-style and MT940 layouts).",
+  "expected": 51216, "received": 32705, "gap": 18511,
+  "cases": [
+    {"ref": "ORD-1002", "category": "refund_unrecorded", "variance": -5000},
+    {"ref": "ORD-1003", "category": "chargeback", "variance": -9500},
+    {"ref": "ORD-1005", "category": "payment_failed", "variance": -3811},
+    {"ref": "txn_1006", "category": "provider_fee", "variance": -200}
+  ]
+}

@@ -29,7 +29,7 @@ CATALOGUE = ROOT / "data" / "financing_products.json"
 
 
 class Session:
-    def __init__(self, *, books, processors, bank, profile: dict, history, receivables,
+    def __init__(self, *, books, processors, bank, profile: dict, history=None, receivables=None,
                  llm: Optional[LLM] = None, log_path: Optional[Path] = None, clock=None):
         self.sources = {"books": books, "processors": processors, "bank": bank}
         self.profile = profile
@@ -43,6 +43,7 @@ class Session:
         self.metrics = None
         self.matches: list = []
         self.adapters: list = []
+        self.decisions: list = []   # human decisions, replayable on a later rerun of the same inputs
         self.stats = {"numbers_checked": 0, "numbers_rejected": 0, "injection_flags": 0,
                       "proposals_refused": 0, "llm_explanations": 0}
 
@@ -52,9 +53,10 @@ class Session:
         path = Path(path)
         profile = json.loads((path / "profile.json").read_text())
         f = profile["files"]
+        opt = lambda key: path / f[key] if f.get(key) else None  # noqa: E731
         return cls(books=path / f["books"], processors=[path / p for p in f["processors"]],
-                   bank=path / f["bank"], profile=profile, history=path / f["history"],
-                   receivables=path / f["receivables"], **kw)
+                   bank=path / f["bank"], profile=profile, history=opt("history"),
+                   receivables=opt("receivables"), **kw)
 
     # ------------------------------------------------------------- plumbing
     def _authorize(self, role: str, action: str, **details):
@@ -144,7 +146,8 @@ class Session:
         return self
 
     # ------------------------------------------------------------- human decisions
-    def _decide(self, role: str, action: str, case_id: str, proposal_id: str, person: str, status: str):
+    def _decide(self, role: str, action: str, case_id: str, proposal_id: str, person: str, status: str,
+                **extra):
         c = self.recon.case(case_id)
         self._authorize(role, action, case=case_id)
         if role not in HUMAN_ROLES:  # defence in depth: policy already blocks this
@@ -155,8 +158,13 @@ class Session:
         if c.status != "open":
             raise PermissionDenied(role, action, f"case is already {c.status}")
         c.status = status
-        self.log.record(role, action, "ok", 2, case=case_id, proposal=proposal_id, person=person)
+        self.log.record(role, action, "ok", 2, case=case_id, proposal=proposal_id, person=person, **extra)
+        self._remember(action, c, person, role, proposal=proposal_id, **extra)
         return c
+
+    def _remember(self, action: str, c, person: str, role: str, **details):
+        self.decisions.append({"action": action, "ref": c.ref, "category": c.category, "person": person,
+                               "role": role, "at": self.log.events[-1]["ts"], **details})
 
     def approve(self, case_id: str, *, role: str, proposal_id: str, person: str):
         return self._decide(role, "approve_fix", case_id, proposal_id, person, "approved")
@@ -169,6 +177,7 @@ class Session:
         self._authorize(role, "escalate_fix", case=case_id)
         c.status = "escalated"
         self.log.record(role, "escalate_fix", "ok", 1, case=case_id, person=person, note=note)
+        self._remember("escalate_fix", c, person, role, note=note)
         return c
 
     def undo(self, case_id: str, *, role: str, person: str):
@@ -176,7 +185,61 @@ class Session:
         self._authorize(role, "approve_fix", case=case_id)
         c.status = "open" if c.proposal else "escalated"
         self.log.record(role, "undo_decision", "ok", 2, case=case_id, person=person)
+        self._remember("undo_decision", c, person, role)
         return c
+
+    # ------------------------------------------------------------- standing rules and replay
+    def apply_rules(self, person: str, role: str = "owner") -> list[str]:
+        """Approve open fixes that match the owner's auto-approval rule.
+
+        The rule is a person's standing decision, so it acts with that person's
+        role, never the agent's. It is off by default, stops with the kill switch,
+        and skips anything with a security flag or less than high confidence.
+        """
+        rule = self.profile.get("auto_approve") or {}
+        if not rule.get("enabled") or self.policy.halted:
+            return []
+        if role not in ("owner",):
+            raise PermissionDenied(role, "set_auto_approval", "only the owner can set auto-approval rules")
+        cats, limit = set(rule.get("categories", [])), int(rule.get("max_amount", 0))
+        done = []
+        for c in self.recon.cases:
+            if (c.status == "open" and c.proposal and c.proposal.balanced and c.category in cats
+                    and abs(c.variance) <= limit and c.confidence == "high" and not c.flags):
+                self._decide(role, "approve_fix", c.id, c.proposal.id, person, "approved",
+                             rule=f"auto-approve {sorted(cats)} up to {limit} cents, set by {rule.get('set_by', person)}")
+                done.append(c.id)
+        return done
+
+    def replay(self, decisions: list[dict]) -> dict:
+        """Re-apply saved decisions after rerunning the same inputs.
+
+        A decision is applied only if the fix it approved is byte-for-byte the
+        same (same proposal id); anything else is skipped and reported.
+        """
+        applied, skipped = 0, []
+        for d in decisions:
+            try:
+                c = self.recon.case(d["ref"])
+            except KeyError:
+                skipped.append({**d, "reason": "difference no longer exists"})
+                continue
+            kw = {"replayed": True, "original_at": d.get("original_at") or d.get("at", "")}
+            try:
+                if d["action"] in ("approve_fix", "reject_fix"):
+                    status = "approved" if d["action"] == "approve_fix" else "rejected"
+                    if c.proposal is None or c.proposal.id != d.get("proposal"):
+                        skipped.append({**d, "reason": "the fix changed, review it again"})
+                        continue
+                    self._decide(d["role"], d["action"], c.id, d["proposal"], d["person"], status, **kw)
+                elif d["action"] == "escalate_fix":
+                    self.escalate(c.id, role=d["role"], person=d["person"], note=d.get("note", ""))
+                elif d["action"] == "undo_decision":
+                    self.undo(c.id, role=d["role"], person=d["person"])
+                applied += 1
+            except PermissionDenied as exc:
+                skipped.append({**d, "reason": exc.reason})
+        return {"applied": applied, "skipped": skipped}
 
     def halt(self, role: str, person: str = ""):
         self._authorize(role, "halt")

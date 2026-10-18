@@ -11,7 +11,9 @@ explainable; every number traces to an input file.
 """
 from __future__ import annotations
 
+import calendar
 import csv
+import io
 import statistics
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -52,6 +54,7 @@ class Forecast:
     weeks: list
     history: list
     receivables: list
+    sales_basis: str = ""
 
     @property
     def lowest(self) -> Week:
@@ -66,23 +69,37 @@ class Forecast:
         return [w for w in self.weeks if w.closing < self.floor]
 
 
-def load_history(path: Path) -> list[dict]:
-    rows = []
-    with open(path, newline="") as fh:
-        for r in csv.DictReader(fh):
-            rows.append({"week_start": r["week_start"], "card_net": to_cents(r["card_net"]),
-                         "wallet_net": to_cents(r["wallet_net"]), "charges": int(r["charges"]),
-                         "disputes": int(r["disputes"])})
-    return rows
+def _csv_source(source) -> list[dict]:
+    """Rows from a path or an uploaded (name, bytes) pair; nothing if absent."""
+    if source is None:
+        return []
+    if isinstance(source, tuple):
+        text = source[1].decode("utf-8-sig")
+    else:
+        path = Path(source)
+        if not path.exists():
+            return []
+        text = path.read_text(encoding="utf-8-sig")
+    return [{(k or "").strip(): (v or "").strip() for k, v in r.items()} for r in csv.DictReader(io.StringIO(text))]
 
 
-def load_receivables(path: Path) -> list[dict]:
-    rows = []
-    with open(path, newline="") as fh:
-        for r in csv.DictReader(fh):
-            rows.append({"invoice": r["invoice"], "customer": r["customer"], "amount": to_cents(r["amount"]),
-                         "issued": r["issued"], "due": r["due"], "status": r["status"]})
-    return rows
+def load_history(source) -> list[dict]:
+    """Weekly settled sales. Optional: without it the forecast uses the owner's estimate."""
+    return [{"week_start": r["week_start"], "card_net": to_cents(r.get("card_net") or "0"),
+             "wallet_net": to_cents(r.get("wallet_net") or "0"), "charges": int(r.get("charges") or 0),
+             "disputes": int(r.get("disputes") or 0)} for r in _csv_source(source)]
+
+
+def load_receivables(source) -> list[dict]:
+    """Open customer invoices. Optional."""
+    return [{"invoice": r["invoice"], "customer": r.get("customer", ""), "amount": to_cents(r["amount"]),
+             "issued": r.get("issued", ""), "due": r["due"], "status": (r.get("status") or "open").lower()}
+            for r in _csv_source(source)]
+
+
+def _next_monday(day: str) -> date:
+    base = _d(day) if day else date.today()
+    return base + timedelta(days=(7 - base.weekday()) % 7 or 7)
 
 
 def _events(profile: dict, start: date, end: date) -> list[tuple[date, str, int]]:
@@ -102,7 +119,7 @@ def _events(profile: dict, start: date, end: date) -> list[tuple[date, str, int]
         elif "monthly_day" in item:
             y, m = start.year, start.month
             while True:
-                d = date(y, m, item["monthly_day"])
+                d = date(y, m, min(item["monthly_day"], calendar.monthrange(y, m)[1]))
                 if d >= end:
                     break
                 if d >= start:
@@ -114,7 +131,7 @@ def _events(profile: dict, start: date, end: date) -> list[tuple[date, str, int]
 
 def build_forecast(recon: ReconResult, profile: dict, history: list[dict], receivables: list[dict]) -> Forecast:
     cash = profile["cash"]
-    start = _d(cash["forecast_start"])
+    start = _d(cash["forecast_start"]) if cash.get("forecast_start") else _next_monday(recon.statement.date)
     weeks_n = cash.get("weeks", 13)
     end = start + timedelta(days=7 * weeks_n)
 
@@ -124,7 +141,12 @@ def build_forecast(recon: ReconResult, profile: dict, history: list[dict], recei
     verified = bank + in_transit - refunds_owed
 
     recent = history[-8:]
-    weekly_sales = int(statistics.mean(h["card_net"] + h["wallet_net"] for h in recent)) if recent else 0
+    if recent:
+        weekly_sales = int(statistics.mean(h["card_net"] + h["wallet_net"] for h in recent))
+        basis = f"average of the last {len(recent)} weeks of settled sales"
+    else:
+        weekly_sales = int(cash.get("weekly_sales", 0))
+        basis = "your own estimate of weekly sales (no sales history uploaded)"
 
     events = _events(profile, start, end)
     weeks, balance = [], verified
@@ -139,12 +161,13 @@ def build_forecast(recon: ReconResult, profile: dict, history: list[dict], recei
         balance = opening + weekly_sales + rec_in - outflows
         weeks.append(Week(ws, opening, weekly_sales, rec_in, 0, outflows, balance,
                           items=[{"date": d.isoformat(), "name": n, "amount": a} for d, n, a in out_items]))
-    return Forecast(bank, in_transit, refunds_owed, verified, weekly_sales, cash["floor"], weeks, history, receivables)
+    return Forecast(bank, in_transit, refunds_owed, verified, weekly_sales, cash["floor"], weeks, history,
+                    receivables, sales_basis=basis)
 
 
 def alerts(recon: ReconResult, fc: Forecast, profile: dict) -> list[dict]:
     out = []
-    as_of = _d(recon.statement.date) if recon.statement.date else _d(profile["cash"]["forecast_start"])
+    as_of = _d(recon.statement.date) if recon.statement.date else fc.weeks[0].start
 
     breaches = fc.breach_weeks
     if breaches:

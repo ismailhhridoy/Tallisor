@@ -57,7 +57,7 @@ Please find our submission for Topic E: SME Finance Copilot. Our entry, Mismatch
 1. Technical documentation: attached (PDF)
 2. Presentation deck: attached (PDF)
 3. Demo video: [link]
-4. Source code: [GitHub link] (README with deployment instructions; 43 automated tests)
+4. Source code: [GitHub link] (README with deployment instructions; 65 automated tests)
 5. Security self-assessment: attached (PDF)
 6. Execution evidence: the `evidence/` folder in the repository (scored evaluation report, hash-chained sandbox operation logs, copilot transcript) and the demo video
 

@@ -1,0 +1,39 @@
+{
+  "name": "Stripe itemized balance change report",
+  "provider": "Stripe",
+  "role": "processor",
+  "description": "Stripe 'Balance change from activity' itemized report (Reports > Balance). Payout rows are built by grouping transactions on automatic_payout_id. Built from Stripe's documented report columns; check against your own export.",
+  "signature": ["balance_transaction_id", "reporting_category", "gross", "fee", "net"],
+  "columns": {
+    "txn_id": "balance_transaction_id",
+    "ts": ["created_utc", "created"],
+    "kind": "reporting_category",
+    "ref": ["payment_metadata[order_id]", "payment_metadata[order]", "invoice_id"],
+    "gross": "gross",
+    "fee": "fee",
+    "net": "net",
+    "currency": "currency",
+    "card_country": ["card_country", "payment_method_details_card_country"],
+    "memo": "description",
+    "original_currency": "customer_facing_currency",
+    "original_amount": "customer_facing_amount"
+  },
+  "kind_map": {
+    "charge": "charge",
+    "payment": "charge",
+    "refund": "refund",
+    "payment_refund": "refund",
+    "partial_capture_reversal": "refund",
+    "dispute": "dispute",
+    "dispute_reversal": "adjustment",
+    "fee": "fee",
+    "payout": "payout",
+    "payout_reversal": "adjustment",
+    "charge_failure": "failed"
+  },
+  "fee_sign": "positive",
+  "payout_sign": "negative",
+  "date_formats": ["%Y-%m-%d %H:%M:%S"],
+  "payouts_from_group": {"id": "automatic_payout_id", "date": "automatic_payout_effective_at_utc"},
+  "derive_rate": true
+}

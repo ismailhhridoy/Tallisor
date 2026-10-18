@@ -10,7 +10,10 @@ import streamlit as st
 
 from mismatchdesk.agent import Copilot
 from mismatchdesk.financing import DISCLAIMER, readiness_pack
-from mismatchdesk.ingest import InputRejected
+from mismatchdesk import settings, store
+from mismatchdesk.ingest import InputRejected, UnknownFormat
+from mismatchdesk.mapping import FIELDS, LABELS, build_adapter, distinct, kind_suggestions, save_adapter, suggest
+from mismatchdesk.report import build_workbook
 from mismatchdesk.llm import from_env
 from mismatchdesk.money import fmt
 from mismatchdesk.reconcile import CATEGORY_LABELS, TONE
@@ -62,43 +65,188 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 
 
 # ------------------------------------------------------------------ session setup
-def start_session(files: dict | None):
+SAMPLES = {
+    "Sample company (Northwind Market)": SAMPLE,
+    "Sample: Stripe, PayPal and MT940 files (Kestrel Goods)": ROOT / "sample_data" / "realformats",
+}
+UPLOAD = "Upload my files"
+ROLE_KEY = {"processor": "processor", "books": "books", "bank": "bank"}
+KINDS = ["charge", "refund", "dispute", "dispute_fee", "failed", "payout", "fee", "adjustment"]
+NONE = "(not in this file)"
+
+TEMPLATES = {
+    "Sales export (books)": ("books_template.csv",
+                             "invoice_no,date,customer,paid_via,currency,amount,status\n"
+                             "INV-1001,2026-10-09,Example customer,Stripe,USD,120.00,paid\n"),
+    "Open customer invoices": ("invoices_template.csv",
+                               "invoice,customer,amount,issued,due,status\n"
+                               "INV-2001,Example customer,1500.00,2026-10-01,2026-10-31,open\n"),
+    "Weekly sales history": ("sales_history_template.csv",
+                             "week_start,card_net,wallet_net,charges,disputes\n"
+                             "2026-09-28,12000.00,800.00,240,1\n"),
+}
+
+
+def user_profile() -> dict:
+    return settings.load() or settings.default_profile()
+
+
+def persist():
+    """Keep the saved copy of an uploaded run in step with decisions."""
+    sess, run_id = st.session_state.get("s"), st.session_state.get("run_id")
+    if sess is not None and run_id:
+        store.save_run(sess, run_id)
+
+
+def start_session(files: dict | None, sample_dir: Path | None = None):
     llm = from_env()
+    existing = store.find_by_inputs(files) if files is not None else None
+    if existing:
+        # Same files as a saved run: continue it, with its decisions, instead of starting over.
+        s, report = store.open_run(existing, profile=user_profile(), llm=llm)
+        store.save_run(s, existing)
+        skipped = len(report["skipped"])
+        st.session_state.update(s=s, chat=[], files=files, run_id=existing,
+                                notice=f"These files match saved run {existing}. Continuing it with your current "
+                                       f"settings: {report['applied']} earlier decision(s) re-applied"
+                                       + (f", {skipped} need review again because the fix changed." if skipped else "."))
+        return
     if files is None:
-        s = Session.from_dir(SAMPLE, llm=llm)
+        s = Session.from_dir(sample_dir or SAMPLE, llm=llm)
     else:
-        profile = json.loads((SAMPLE / "profile.json").read_text())
-        s = Session(books=files["books"], processors=files["processors"], bank=files["bank"], profile=profile,
-                    history=SAMPLE / "history.csv", receivables=SAMPLE / "receivables.csv", llm=llm)
+        s = Session(books=files["books"], processors=files["processors"], bank=files["bank"],
+                    history=files.get("history"), receivables=files.get("receivables"),
+                    profile=user_profile(), llm=llm)
     s.run()
+    auto = s.apply_rules(person=st.session_state.get("person") or "Owner")
     st.session_state.s = s
     st.session_state.chat = []
+    st.session_state.files = files
+    st.session_state.run_id = store.save_run(s) if files is not None else None
+    st.session_state.notice = (f"Your auto-approval rule approved {len(auto)} fix(es). They are marked in the "
+                               f"audit log with the rule and who set it.") if auto else ""
+
+
+def try_start(files, sample_dir=None):
+    try:
+        start_session(files, sample_dir)
+        st.session_state.pop("pending_map", None)
+    except UnknownFormat as exc:
+        st.session_state.pending_map = {"name": exc.name, "role": exc.role, "header": exc.header,
+                                        "sample": exc.sample, "files": files}
+    except InputRejected as exc:
+        st.session_state.upload_error = f"File refused: {exc}"
 
 
 with st.sidebar:
     md("### Mismatch Desk")
     cap("Governed finance copilot for small businesses")
-    source = st.radio("Data", ["Sample company (Northwind Market)", "Upload my files"], key="source")
+    source = st.radio("Data", [*SAMPLES, UPLOAD], key="source")
     uploaded = None
-    if source == "Upload my files":
-        b = st.file_uploader("Books / sales export (CSV)", type=["csv"], key="up_books")
-        p = st.file_uploader("Payment provider reports (CSV)", type=["csv"], accept_multiple_files=True, key="up_psp")
-        k = st.file_uploader("Bank statement (CAMT.053 XML or CSV)", type=["xml", "csv"], key="up_bank")
-        cap("Cash plan, invoices and fee contracts use the sample company's settings in this demo.")
+    if source == UPLOAD:
+        b = st.file_uploader("Sales export from your books (CSV)", type=["csv"], key="up_books")
+        p = st.file_uploader("Payment provider reports (CSV)", type=["csv"], accept_multiple_files=True,
+                             key="up_psp", help="Stripe, PayPal or any other provider. Unknown layouts can be "
+                                                "mapped once and are recognised after that.")
+        k = st.file_uploader("Bank statement (CAMT.053, MT940 or CSV)", type=["xml", "csv", "sta", "mt940", "txt"],
+                             key="up_bank")
+        with st.expander("Optional: invoices and sales history"):
+            inv = st.file_uploader("Open customer invoices (CSV)", type=["csv"], key="up_inv")
+            hist = st.file_uploader("Weekly sales history (CSV)", type=["csv"], key="up_hist",
+                                    help="Without history the forecast uses your weekly sales estimate in Settings.")
+            for label, (fname, body) in TEMPLATES.items():
+                st.download_button(f"Template: {label}", body, file_name=fname, mime="text/csv",
+                                   key=f"tpl_{fname}", use_container_width=True)
+        cap("Fee contracts, payments and safety floor come from the Settings tab.")
         if b and p and k:
             uploaded = {"books": (b.name, b.getvalue()), "processors": [(f.name, f.getvalue()) for f in p],
-                        "bank": (k.name, k.getvalue())}
-    if st.button("Run reconciliation", type="primary", use_container_width=True, key="run_btn"):
-        try:
-            start_session(uploaded if source == "Upload my files" else None)
-        except InputRejected as exc:
-            st.error(f"File refused: {exc}")
+                        "bank": (k.name, k.getvalue()),
+                        "receivables": (inv.name, inv.getvalue()) if inv else None,
+                        "history": (hist.name, hist.getvalue()) if hist else None}
+    ready = source != UPLOAD or uploaded is not None
+    if st.button("Run reconciliation", type="primary", use_container_width=True, key="run_btn", disabled=not ready):
+        try_start(uploaded if source == UPLOAD else None, SAMPLES.get(source))
+    if st.session_state.get("upload_error"):
+        st.error(st.session_state.pop("upload_error"))
     st.divider()
     person = st.text_input("Your name (for the audit log)", value="Maya Chen", key="person")
     role = st.selectbox("Your role", ["owner", "reviewer", "viewer"], key="role",
-                        help="Owners and reviewers can approve fixes. Viewers can only read.")
+                        help="Owners and reviewers can approve fixes. Viewers can only read. "
+                             "Only owners can change settings and auto-approval rules.")
     llm_name = from_env().name
     cap(f"AI model: {'not configured, deterministic explanations' if llm_name == 'none' else llm_name}")
+
+
+# ------------------------------------------------------------------ column mapping for unknown files
+def mapping_screen(pm: dict):
+    role_key = ROLE_KEY[pm["role"]]
+    what = {"processor": "payment provider report", "books": "sales export", "bank": "bank statement"}[role_key]
+    st.subheader(f"Teach Mismatch Desk this {what}")
+    md(f"**{pm['name']}** has a layout we have not seen before. Tell us which column holds what, once. "
+       f"Next time a file with these columns arrives it is read automatically.")
+    st.dataframe(pd.DataFrame(pm["sample"][:5]), hide_index=True, use_container_width=True)
+    guess = suggest(pm["header"], role_key, pm["sample"])
+    options = [NONE, *pm["header"]]
+    req, opt = FIELDS[role_key]["required"], FIELDS[role_key]["optional"]
+    mapping = {}
+    cols = st.columns(3)
+    for i, field in enumerate(req + opt):
+        label = LABELS.get(field, field) + (" (required)" if field in req else "")
+        current = guess["mapping"].get(field)
+        mapping[field] = cols[i % 3].selectbox(label, options, index=options.index(current) if current else 0,
+                                               key=f"mapcol_{pm['role']}_{field}")
+    mapping = {k: v for k, v in mapping.items() if v != NONE}
+    c1, c2, c3 = st.columns(3)
+    name = c1.text_input("Name this format", value=f"{Path(pm['name']).stem} format", key="map_name")
+    provider = ""
+    if role_key in ("processor", "books"):
+        provider = c2.text_input("Provider name" if role_key == "processor" else "Paid via (if there is no column)",
+                                 value=Path(pm["name"]).stem.split("_")[0].title() if role_key == "processor" else "",
+                                 key="map_provider",
+                                 help="Must match the 'paid via' value in your sales export and your fee contract.")
+    day_first = c3.radio("Dates are written", ["day first (25/10/2026)", "month first (10/25/2026)"],
+                         index=0 if guess["options"]["day_first"] else 1, key="map_dates").startswith("day")
+    fee_sign, kind_map, arrival = "positive", {}, None
+    if role_key == "processor":
+        fee_sign = st.radio("Fees appear as", ["positive numbers (7.50)", "negative numbers (-7.50)"],
+                            index=0 if guess["options"]["fee_sign"] == "positive" else 1, horizontal=True,
+                            key="map_fee").split()[0]
+        if mapping.get("kind"):
+            values = distinct(pm["sample"], mapping["kind"])
+            kinds = kind_suggestions(values)
+            md("**What each transaction type means**")
+            edited = st.data_editor(pd.DataFrame({"Value in file": list(kinds), "Means": list(kinds.values())}),
+                                    column_config={"Value in file": st.column_config.TextColumn(disabled=True),
+                                                   "Means": st.column_config.SelectboxColumn(options=KINDS,
+                                                                                             required=True)},
+                                    hide_index=True, use_container_width=True, key="map_kinds")
+            kind_map = dict(zip(edited["Value in file"], edited["Means"]))
+        else:
+            cap("No type column: positive amounts are read as sales and negative amounts as refunds.")
+        if not mapping.get("arrival_date"):
+            arrival = st.number_input("Days for a payout to reach the bank", 0, 14, 2, key="map_days")
+    b1, b2 = st.columns([1, 4])
+    if role == "viewer":
+        st.info("A viewer cannot save a new file format. Switch to owner or reviewer.")
+    if b1.button("Save and continue", type="primary", key="map_save", disabled=role == "viewer"):
+        try:
+            cfg = build_adapter(name=name, role=role_key, mapping=mapping, provider=provider,
+                                fee_sign="negative" if fee_sign == "negative" else "positive",
+                                day_first=day_first, kind_map=kind_map, payout_arrival_days=arrival)
+            save_adapter(cfg)
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+        try_start(pm["files"])
+        st.rerun()
+    if b2.button("Cancel", key="map_cancel"):
+        st.session_state.pop("pending_map", None)
+        st.rerun()
+
+
+if st.session_state.get("pending_map"):
+    mapping_screen(st.session_state.pending_map)
+    st.stop()
 
 if "s" not in st.session_state:
     try:
@@ -110,17 +258,29 @@ if "s" not in st.session_state:
 s: Session = st.session_state.s
 r, fc = s.recon, s.forecast
 halted = s.policy.halted
+CCY = s.profile["business"].get("reporting_currency", "USD")
 
 # ------------------------------------------------------------------ header
 top_l, top_r = st.columns([3, 1])
 with top_l:
-    html_md(f"<div class='md-muted'>{s.profile['business']['name']} · sales of {r.sales_date} · "
-                f"bank statement {r.statement.date} · providers: {', '.join(r.providers)}</div>")
+    html_md(f"<div class='md-muted'>{s.profile['business']['name']} · sales of {r.sales_date or 'the period'} · "
+                f"bank statement {r.statement.date} · providers: {', '.join(r.providers)}"
+                f"{' · saved as run ' + st.session_state.run_id if st.session_state.get('run_id') else ''}</div>")
 with top_r:
     if halted:
         st.error("Agent stopped (kill switch)")
+    st.download_button("Excel report", build_workbook(s), key="dl_xlsx", use_container_width=True,
+                       file_name=f"mismatch_desk_{r.statement.date}.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+if st.session_state.get("notice"):
+    st.info(st.session_state.notice)
+missing = settings.missing_fee_contracts(s.profile, r.providers)
+if missing:
+    st.warning(f"No fee contract entered for {', '.join(missing)}, so their fees are accepted as charged and not "
+               f"checked. Add your rates in Settings to catch overcharges.")
 
-tabs = st.tabs(["Overview", "Review differences", "Cash flow", "Financing", "Ask the copilot", "Audit and security"])
+tabs = st.tabs(["Overview", "Review differences", "Cash flow", "Financing", "Ask the copilot", "Audit and security",
+                "Settings", "History"])
 
 # ------------------------------------------------------------------ overview
 with tabs[0]:
@@ -147,7 +307,7 @@ with tabs[0]:
     df = pd.DataFrame(rows)
     if not df.empty:
         chart = alt.Chart(df).mark_bar().encode(
-            x=alt.X("Amount:Q", title="Effect on cash received (USD)"),
+            x=alt.X("Amount:Q", title=f"Effect on cash received ({CCY})"),
             y=alt.Y("Cause:N", sort="x", title=None, axis=alt.Axis(labelLimit=300)),
             color=alt.Color("Type:N", scale=alt.Scale(domain=["Money short", "Extra money", "On its way"],
                                                       range=["#A8281F", "#3B7BD1", "#D9A441"]),
@@ -201,22 +361,26 @@ with tabs[1]:
                 if cols[0].button("Approve fix", key=f"ap_{c.id}", type="primary", disabled=not confirm or role == "viewer"):
                     try:
                         s.approve(c.id, role=role, proposal_id=p.id, person=person)
+                        persist()
                         st.rerun()
                     except PermissionDenied as exc:
                         st.error(str(exc))
                 if cols[1].button("Reject", key=f"rj_{c.id}", disabled=role == "viewer"):
                     try:
                         s.reject(c.id, role=role, proposal_id=p.id, person=person)
+                        persist()
                         st.rerun()
                     except PermissionDenied as exc:
                         st.error(str(exc))
                 if cols[2].button("Send to a person", key=f"es_{c.id}", disabled=role == "viewer"):
                     s.escalate(c.id, role=role if role != "viewer" else "reviewer", person=person)
+                    persist()
                     st.rerun()
             elif c.status in ("approved", "rejected"):
                 cols[0].success(c.status.title())
                 if cols[1].button("Undo", key=f"un_{c.id}", disabled=role == "viewer"):
                     s.undo(c.id, role=role, person=person)
+                    persist()
                     st.rerun()
     approved = sum(c.status == "approved" for c in r.cases)
     st.divider()
@@ -231,10 +395,10 @@ with tabs[2]:
     st.subheader("Cash-flow management with alerts")
     md(f"The forecast starts from **verified cash of {fmt(fc.verified_cash)}**: bank {fmt(fc.bank_balance)} "
              f"plus {fmt(fc.in_transit)} in transit, minus {fmt(fc.refunds_owed)} owed back to customers. "
-             f"Weekly sales receipts assumed: {fmt(fc.weekly_sales)} (average of the last 8 weeks).")
+             f"Weekly sales receipts assumed: {fmt(fc.weekly_sales)} ({fc.sales_basis}).")
     wdf = pd.DataFrame([{"Week of": w.start.isoformat(), "Cash at week end": w.closing / 100} for w in fc.weeks])
     line = alt.Chart(wdf).mark_line(point=True, color="#0A5C4F").encode(
-        x=alt.X("Week of:T", title=None), y=alt.Y("Cash at week end:Q", title="USD"),
+        x=alt.X("Week of:T", title=None), y=alt.Y("Cash at week end:Q", title=CCY),
         tooltip=[alt.Tooltip("Week of:T"), alt.Tooltip("Cash at week end:Q", format=",.2f")])
     floor = alt.Chart(pd.DataFrame({"y": [fc.floor / 100]})).mark_rule(color="#A8281F", strokeDash=[6, 4]).encode(y="y:Q")
     zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#8a8a8a").encode(y="y:Q")
@@ -329,3 +493,147 @@ with tabs[5]:
     if st.button("Stop the agent", disabled=halted, key="halt_btn"):
         s.halt(role if role != "viewer" else "owner", person=person)
         st.rerun()
+
+# ------------------------------------------------------------------ settings
+SAFE_AUTO = ["fee_variance", "fx_difference", "refund_unrecorded", "provider_fee"]
+CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "SGD", "INR", "AED", "HKD", "JPY", "CHF", "SEK", "NZD", "ZAR",
+              "BRL", "MXN", "BDT", "PKR", "IDR", "MYR", "PHP", "NGN", "KES"]
+
+with tabs[6]:
+    prof = user_profile()
+    owner = role == "owner"
+    st.subheader("Business settings")
+    cap("These settings are used when you upload your own files. The sample companies keep their own settings. "
+        f"Saved on this computer in {settings.path()}.")
+    if not owner:
+        st.info("Only the owner can change settings.")
+    biz, cash = prof["business"], prof["cash"]
+    a1, a2, a3 = st.columns(3)
+    biz["name"] = a1.text_input("Business name", biz["name"], disabled=not owner, key="set_name")
+    cur = biz.get("reporting_currency", "USD")
+    biz["reporting_currency"] = a2.selectbox("Reporting currency", CURRENCIES,
+                                             index=CURRENCIES.index(cur) if cur in CURRENCIES else 0,
+                                             disabled=not owner, key="set_ccy")
+    biz["months_trading"] = int(a3.number_input("Months trading", 0, 600, int(biz.get("months_trading", 12)),
+                                                disabled=not owner, key="set_months"))
+
+    md("**Cash plan**")
+    b1, b2, b3 = st.columns(3)
+    cash["floor"] = round(b1.number_input("Safety floor (lowest cash you are comfortable with)", 0.0, 1e9,
+                                          cash.get("floor", 0) / 100, step=100.0, disabled=not owner,
+                                          key="set_floor") * 100)
+    cash["weekly_sales"] = round(b2.number_input("Typical weekly sales received (used without history)", 0.0, 1e9,
+                                                 cash.get("weekly_sales", 0) / 100, step=100.0, disabled=not owner,
+                                                 key="set_weekly") * 100)
+    cash["weeks"] = int(b3.number_input("Forecast weeks", 4, 26, int(cash.get("weeks", 13)), disabled=not owner,
+                                        key="set_weeks"))
+    md("**Regular payments** (payroll, rent, suppliers, loan repayments, tax)")
+    cap("Repeats: weekly, every 2 weeks, monthly or once. Next date as 2026-11-01; for monthly you can write day 1.")
+    pay_df = pd.DataFrame(settings.payment_rows(prof) or [{"name": "", "amount": 0.0, "repeats": "monthly",
+                                                           "next_date": ""}])
+    pay_edit = st.data_editor(pay_df, num_rows="dynamic", hide_index=True, use_container_width=True,
+                              disabled=not owner, key="set_pay",
+                              column_config={"name": st.column_config.TextColumn("Payment"),
+                                             "amount": st.column_config.NumberColumn("Amount", min_value=0.0,
+                                                                                     format="%.2f"),
+                                             "repeats": st.column_config.SelectboxColumn(
+                                                 "Repeats", options=list(settings.PAYMENT_KINDS)),
+                                             "next_date": st.column_config.TextColumn("Next date")})
+
+    md("**Fee contracts** (what each provider agreed to charge you)")
+    providers = sorted(set(prof["fee_schedules"]) | (set(r.providers) if st.session_state.get("files") else set()))
+    new_provider = st.text_input("Add a provider", "", disabled=not owner, key="set_newprov",
+                                 placeholder="Name exactly as in your sales export, for example Stripe")
+    if new_provider.strip():
+        providers = sorted(set(providers) | {new_provider.strip()})
+    schedules = {}
+    for prov in providers:
+        sched = prof["fee_schedules"].get(prov, {})
+        dom, intl = sched.get("domestic", {}), sched.get("international")
+        with st.container(border=True):
+            f = st.columns([1.4, 1, 1, 1, 1, 1])
+            f[0].markdown(f"**{prov}**" + ("" if sched else "  \n:orange[no contract yet]"))
+            d_pct = f[1].number_input("Domestic %", 0.0, 20.0, dom.get("bp", 0) / 100, step=0.05, format="%.2f",
+                                      key=f"fee_dp_{prov}", disabled=not owner)
+            d_fix = f[2].number_input("Domestic fixed", 0.0, 100.0, dom.get("fixed", 0) / 100, step=0.05,
+                                      format="%.2f", key=f"fee_df_{prov}", disabled=not owner)
+            i_pct = f[3].number_input("International %", 0.0, 20.0, (intl or {}).get("bp", 0) / 100, step=0.05,
+                                      format="%.2f", key=f"fee_ip_{prov}", disabled=not owner,
+                                      help="Leave 0 if the provider charges one rate everywhere.")
+            i_fix = f[4].number_input("International fixed", 0.0, 100.0, (intl or {}).get("fixed", 0) / 100,
+                                      step=0.05, format="%.2f", key=f"fee_if_{prov}", disabled=not owner)
+            home = f[5].text_input("Home country", sched.get("home_country", ""), max_chars=2, key=f"fee_hc_{prov}",
+                                   disabled=not owner, help="Two-letter code. Cards from elsewhere get the "
+                                                            "international rate.")
+            if d_pct or d_fix or sched:
+                has_intl = bool(i_pct or i_fix)
+                schedules[prov] = settings.fee_schedule(d_pct, d_fix, i_pct if has_intl else None,
+                                                        i_fix if has_intl else None, home if has_intl else "")
+
+    md("**Estimates used when no sales history is uploaded**")
+    e1, e2, e3 = st.columns(3)
+    biz["revenue_variation_estimate"] = e1.slider("Week-to-week sales variation", 0.0, 1.0,
+                                                  float(biz.get("revenue_variation_estimate", 0.3)), 0.05,
+                                                  disabled=not owner, key="set_cv")
+    biz["dispute_rate_estimate"] = e2.slider("Share of payments disputed", 0.0, 0.05,
+                                             float(biz.get("dispute_rate_estimate", 0.005)), 0.001, format="%.3f",
+                                             disabled=not owner, key="set_disp")
+    biz["card_share_estimate"] = e3.slider("Share of sales paid by card", 0.0, 1.0,
+                                           float(biz.get("card_share_estimate", 1.0)), 0.05, disabled=not owner,
+                                           key="set_card")
+
+    md("**Auto-approval rule** (off unless you turn it on)")
+    cap("Approves only high-confidence fixes in the chosen categories, at or under the amount, with no security "
+        "flag. It acts in your name, is written to the audit log with who set it, and stops with the kill switch. "
+        "It can never move money.")
+    rule = prof.get("auto_approve") or {"enabled": False}
+    g1, g2, g3 = st.columns([1, 2, 1])
+    enabled = g1.toggle("Turn on", bool(rule.get("enabled")), disabled=not owner, key="set_auto")
+    cats = g2.multiselect("Categories", SAFE_AUTO, [c for c in rule.get("categories", []) if c in SAFE_AUTO],
+                          format_func=lambda c: CATEGORY_LABELS[c], disabled=not owner, key="set_auto_cats")
+    limit = g3.number_input("Up to amount", 0.0, 1000.0, rule.get("max_amount", 2000) / 100, step=5.0,
+                            disabled=not owner, key="set_auto_max")
+
+    if st.button("Save settings", type="primary", disabled=not owner, key="set_save"):
+        try:
+            prof["cash"]["payments"] = settings.payments_from_rows(pay_edit.to_dict("records"))
+            prof["fee_schedules"] = schedules
+            prof["auto_approve"] = {"enabled": enabled and bool(cats), "categories": cats,
+                                    "max_amount": round(limit * 100), "set_by": person}
+            settings.save(prof)
+            s.log.record(role, "change_settings", "ok", 2, person=person, auto_approve=prof["auto_approve"]["enabled"],
+                         providers=sorted(schedules))
+            st.success("Saved. Run reconciliation again to use the new settings.")
+        except ValueError as exc:
+            st.error(str(exc))
+    if st.session_state.get("files") and st.button("Rerun my files with these settings", key="set_rerun"):
+        try_start(st.session_state.files)
+        st.rerun()
+
+# ------------------------------------------------------------------ history
+with tabs[7]:
+    st.subheader("Saved runs")
+    cap("Every run on your own files is saved with the exact files, settings, decisions and audit log. Opening a "
+        "run recalculates it and re-applies your decisions only where the fix is unchanged.")
+    runs = store.list_runs()
+    if not runs:
+        md("No saved runs yet. Upload your files and run a reconciliation.")
+    else:
+        hist_df = pd.DataFrame([{"Run": x["id"], "Business": x["business"], "Bank statement": x["statement_date"],
+                                 "Providers": x["providers"], "Gap": fmt(x["gap"]), "Differences": x["cases"],
+                                 "Open": x["open"], "Approved": x["approved"],
+                                 "Shortfall": fmt(x["shortfall"]), "Saved": x["updated"][:16].replace("T", " ")}
+                                for x in runs])
+        st.dataframe(hist_df, hide_index=True, use_container_width=True)
+        h1, h2 = st.columns([3, 1])
+        pick = h1.selectbox("Open a run", [x["id"] for x in runs], key="hist_pick")
+        if h2.button("Open", key="hist_open", use_container_width=True):
+            try:
+                again, report = store.open_run(pick, llm=from_env())
+                st.session_state.update(s=again, run_id=pick, chat=[], files=store.stored_inputs(pick),
+                                        notice=f"Opened run {pick}. Re-applied {report['applied']} decision(s)"
+                                               + (f"; {len(report['skipped'])} need review again because the fix "
+                                                  f"changed." if report["skipped"] else "."))
+                st.rerun()
+            except (KeyError, InputRejected) as exc:
+                st.error(f"Could not open this run: {exc}")

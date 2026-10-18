@@ -28,6 +28,7 @@ CATEGORY_LABELS = {
     "payout_in_transit": "Payout still on its way",
     "payout_overdue": "Payout overdue",
     "unidentified_deposit": "Deposit not linked to a payout",
+    "provider_fee": "Provider charge not linked to a sale",
     "unexplained": "Difference not yet explained",
     "residual": "Unexplained remainder",
 }
@@ -36,7 +37,7 @@ TONE = {  # for display: money short, extra money, timing only
     "fee_variance": "short", "refund_unrecorded": "short", "chargeback": "short",
     "fx_difference": "short", "payment_failed": "short", "no_payment_record": "short",
     "duplicate_charge": "over", "unrecorded_sale": "over", "unidentified_deposit": "over",
-    "payout_in_transit": "timing", "payout_overdue": "short", "unexplained": "short", "residual": "short",
+    "payout_in_transit": "timing", "payout_overdue": "short", "provider_fee": "short", "unexplained": "short", "residual": "short",
 }
 
 
@@ -80,7 +81,7 @@ class ReconResult:
 
 
 def _schedule(profile: dict, provider: str, card_country: str = "") -> tuple[int, int, str]:
-    sched = profile["fee_schedules"].get(provider)
+    sched = profile.get("fee_schedules", {}).get(provider)
     if not sched:
         return 0, 0, "no contract on file"
     home = sched.get("home_country")
@@ -124,10 +125,15 @@ def reconcile(books: list[BookEntry], psp: list[PspTxn], bank: list[BankTxn],
         if b.status != "paid":
             continue
         seen_refs.add(b.ref)
-        exp_fee = contracted_fee(profile, b.channel, b.amount_usd)
+        txns = by_ref.get(b.ref, [])
+        if profile.get("fee_schedules", {}).get(b.channel):
+            exp_fee = contracted_fee(profile, b.channel, b.amount_usd)
+        else:
+            # No fee contract entered for this provider: fees cannot be checked, so the
+            # provider's own fee is accepted. Settings shows which contracts are missing.
+            exp_fee = sum(t.fee for t in txns if t.kind == "charge")
         expected_net = b.amount_usd - exp_fee
         expected_total += expected_net
-        txns = by_ref.get(b.ref, [])
         actual_net = sum(t.net for t in txns)
         variance = actual_net - expected_net
         if variance == 0 and txns:
@@ -246,8 +252,10 @@ def _order_case(cid, b: BookEntry, txns, exp_fee, expected_net, actual_net, vari
         allowed |= {meta["dup_gross"], meta["dup_fee"], meta["dup_net"]}
     elif disputes:
         category = "chargeback"
-        d_amt = -sum(t.net for t in disputes)
-        d_fee = -sum(t.net for t in dispute_fees)
+        # Some providers put the dispute fee on the dispute row itself (fee column),
+        # others as a separate row; both are handled.
+        d_amt = -sum(t.gross for t in disputes) if any(t.gross for t in disputes) else -sum(t.net for t in disputes)
+        d_fee = sum(t.fee for t in disputes) - sum(t.net for t in dispute_fees)
         due = next((t.evidence_due for t in disputes if t.evidence_due), "")
         meta.update(dispute_amount=d_amt, dispute_fee=d_fee, evidence_due=due)
         checks.append(f"The dispute references the original charge for {b.ref}.")
@@ -305,6 +313,18 @@ def _order_case(cid, b: BookEntry, txns, exp_fee, expected_net, actual_net, vari
 
 
 def _unbooked_case(cid, ref, txns, net) -> Case:
+    if all(t.kind in ("fee", "adjustment") for t in txns) and net < 0 and any(t.kind == "fee" for t in txns):
+        t0 = txns[0]
+        case = Case(
+            id=cid, kind="unbooked", ref=ref or t0.txn_id, party="", provider=t0.provider,
+            category="provider_fee", variance=net, impact=-net, confidence="high",
+            evidence=[Evidence(t.provider, t.txn_id, f"{t.kind.title()}: {t.memo or 'provider charge'}", t.net) for t in txns],
+            checks=[f"{t0.provider} deducted a charge that is not linked to any sale."],
+            meta={"fee_total": -net},
+        )
+        case.allowed_numbers = {abs(net)} | {abs(t.net) for t in txns}
+        _screen(case, txns)
+        return case
     charge = next((t for t in txns if t.kind == "charge"), txns[0])
     ev = [Evidence(t.provider, t.txn_id, f"{t.kind.title()} for reference {ref or '(blank)'}", t.net) for t in txns]
     ev.append(Evidence("Books", ref, "No sale with this reference", 0))

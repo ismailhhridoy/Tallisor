@@ -1,0 +1,6 @@
+invoice_no,date,customer,paid_via,currency,amount,amount_usd,fx_rate,status
+ORD-1001,2026-10-09,Kim Studio,Stripe,USD,100.00,100.00,,paid
+ORD-1002,2026-10-09,Osei Home,Stripe,USD,250.00,250.00,,paid
+ORD-1003,2026-10-09,J. Park,Stripe,USD,80.00,80.00,,paid
+ORD-1004,2026-10-09,Ada Lee,PayPal,USD,60.00,60.00,,paid
+ORD-1005,2026-10-09,Tom Ray,PayPal,USD,40.00,40.00,,paid

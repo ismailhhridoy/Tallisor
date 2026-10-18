@@ -75,6 +75,10 @@ def build_proposal(case: Case) -> Proposal | None:
         lines = [L(clr, debit=n), L("Payment processing fees", debit=f), L("Sales revenue", credit=g)]
         summary = f"Record the missing sale of {fmt(g)}."
         tasks = [f"Create the missing invoice for reference {case.ref}."]
+    elif case.category == "provider_fee":
+        x = m["fee_total"]
+        lines = [L("Payment processing fees", debit=x), L(clr, credit=x)]
+        summary = f"Record the {fmt(x)} provider charge as a cost."
     elif case.category == "payout_in_transit":
         summary = f"Nothing to record. Check the bank again on {case.meta.get('arrival_date')}."
         tasks = [f"Confirm the {fmt(case.meta['amount'])} deposit arrives on {case.meta.get('arrival_date')}."]

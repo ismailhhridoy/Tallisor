@@ -5,9 +5,11 @@ calculation is integer arithmetic, so totals reconcile to the cent.
 """
 from __future__ import annotations
 
+import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 MINUS = "−"
+_DECIMAL_COMMA = re.compile(r"^\(?-?(\d{1,3}(\.\d{3})+|\d+),\d{1,2}\)?$")
 
 
 class MoneyParseError(ValueError):
@@ -20,9 +22,16 @@ def to_cents(value) -> int:
         raise MoneyParseError("empty amount")
     if isinstance(value, int):
         return value * 100
-    text = str(value).strip().replace(",", "").replace("$", "").replace(MINUS, "-")
+    text = str(value).strip().replace("$", "").replace(MINUS, "-").replace(" ", "").replace(" ", "")
     if text == "":
         raise MoneyParseError("empty amount")
+    # Decimal-comma style used across Europe, Latin America and many bank exports:
+    # "10,00", "1.234,56", "-0,5". A comma followed by exactly one or two digits at
+    # the end is a decimal mark; otherwise commas are thousands separators.
+    if _DECIMAL_COMMA.match(text):
+        text = text.replace(".", "").replace(",", ".")
+    else:
+        text = text.replace(",", "")
     negative = False
     if text.startswith("(") and text.endswith(")"):
         negative, text = True, text[1:-1]

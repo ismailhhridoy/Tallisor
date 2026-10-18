@@ -1,0 +1,16 @@
+{
+  "name": "Bank statement (CSV, separate debit and credit columns)",
+  "role": "bank",
+  "description": "Common internet-banking export with Debit and Credit columns and a running balance.",
+  "signature": ["Date", "Debit", "Credit"],
+  "columns": {
+    "txn_id": ["Transaction ID", "Ref No", "Reference"],
+    "date": ["Date", "Transaction Date", "Value Date"],
+    "debit": "Debit",
+    "credit": "Credit",
+    "reference": ["Reference", "Ref No", "Cheque No"],
+    "remittance_info": ["Description", "Details", "Narration", "Particulars"],
+    "balance": ["Balance", "Running Balance"]
+  },
+  "date_formats": ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d %b %Y"]
+}

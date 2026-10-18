@@ -36,6 +36,7 @@ class Metrics:
     need_weeks: int
     weeks_until_need: int
     receivables_after_gap: int = 0
+    estimated: list = field(default_factory=list)   # which inputs are owner estimates, not records
 
 
 @dataclass
@@ -54,11 +55,23 @@ def load_catalogue(path: Path) -> list[dict]:
 
 def metrics(fc: Forecast, profile: dict) -> Metrics:
     weeks = fc.history[-12:]
-    weekly = [h["card_net"] + h["wallet_net"] for h in weeks] or [0]
-    mean = statistics.mean(weekly)
-    cv = statistics.pstdev(weekly) / mean if mean else 1.0
-    charges = sum(h["charges"] for h in weeks) or 1
-    disputes = sum(h["disputes"] for h in weeks)
+    estimated = []
+    biz = profile["business"]
+    if weeks:
+        weekly = [h["card_net"] + h["wallet_net"] for h in weeks]
+        mean = statistics.mean(weekly)
+        cv = statistics.pstdev(weekly) / mean if mean else 1.0
+        charges = sum(h["charges"] for h in weeks) or 1
+        disputes = sum(h["disputes"] for h in weeks)
+        dispute_rate = disputes / charges
+        card_monthly = int(statistics.mean(h["card_net"] for h in weeks) * 52 / 12)
+    else:
+        # No history uploaded: fall back to the owner's estimates and say so.
+        mean = fc.weekly_sales
+        cv = float(biz.get("revenue_variation_estimate", 0.3))
+        dispute_rate = float(biz.get("dispute_rate_estimate", 0.0))
+        card_monthly = int(mean * float(biz.get("card_share_estimate", 1.0)) * 52 / 12)
+        estimated = ["monthly revenue", "revenue variation", "dispute rate"]
     start = fc.weeks[0].start.isoformat() if fc.weeks else ""
     eligible_rec = sum(r["amount"] for r in fc.receivables if r["status"] == "open" and r["due"] >= start)
     breach = fc.breach_weeks
@@ -70,16 +83,17 @@ def metrics(fc: Forecast, profile: dict) -> Metrics:
         after_gap = sum(r["amount"] for r in fc.receivables
                         if r["status"] == "open" and last <= r["due"] <= horizon)
     return Metrics(
-        months_trading=profile["business"]["months_trading"],
+        months_trading=int(biz.get("months_trading", 0)),
         monthly_revenue=int(mean * 52 / 12),
-        card_monthly=int(statistics.mean(h["card_net"] for h in weeks) * 52 / 12) if weeks else 0,
+        card_monthly=card_monthly,
         revenue_volatility=round(cv, 3),
-        chargeback_rate=round(disputes / charges, 4),
+        chargeback_rate=round(dispute_rate, 4),
         eligible_receivables=eligible_rec,
         need=fc.shortfall,
         need_weeks=len(breach),
         weeks_until_need=first_idx,
         receivables_after_gap=after_gap,
+        estimated=estimated,
     )
 
 
