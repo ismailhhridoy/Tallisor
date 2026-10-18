@@ -8,3 +8,7 @@ maxUploadSize = 5
 [theme]
 primaryColor = "#0074FB"
 textColor = "#031230"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = false

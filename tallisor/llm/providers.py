@@ -63,9 +63,20 @@ class NullLLM(LLM):
     """No model: callers use their deterministic fallback."""
 
 
+def _ssl_context():
+    """Trusted certificates. Python from python.org on macOS ships without any,
+    which makes every HTTPS call fail; certifi provides Mozilla's list."""
+    import ssl
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
 def _post(url: str, headers: dict, body: dict) -> dict:
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"content-type": "application/json", **headers})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310 (fixed https endpoints)
+    with urllib.request.urlopen(req, timeout=TIMEOUT, context=_ssl_context()) as resp:  # noqa: S310 (fixed https endpoints)
         return json.loads(resp.read().decode())
 
 
@@ -147,13 +158,13 @@ DEFAULT_MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-4o-mini", "ge
 def _dotenv() -> dict:
     """Read KEY=value lines from a private .env file, if there is one.
 
-    Looked for in the project folder and in the user's Tallisor workspace.
+    The key saved from the app's Settings (in the user's Tallisor workspace) comes first,
+    then a .env file in the project folder.
     Values already set in the environment win. The file is never committed
     (.gitignore lists it) and never logged.
     """
     found = {}
-    for path in (Path(__file__).resolve().parents[2] / ".env",
-                 Path(os.getenv("TALLISOR_WORKSPACE", Path.home() / ".tallisor")).expanduser() / ".env"):
+    for path in (_workspace_env(), Path(__file__).resolve().parents[2] / ".env"):
         try:
             for line in path.read_text().splitlines():
                 line = line.strip()
@@ -163,6 +174,41 @@ def _dotenv() -> dict:
         except OSError:
             continue
     return found
+
+
+def _workspace_env() -> Path:
+    return Path(os.getenv("TALLISOR_WORKSPACE", Path.home() / ".tallisor")).expanduser() / ".env"
+
+
+def save_api_key(provider: str, key: str) -> None:
+    """Store one provider key in the user's private workspace file (owner-only permissions).
+
+    Any other provider keys there are removed, so exactly one model is used.
+    """
+    if provider not in KEYS:
+        raise ValueError(f"Unknown AI provider: {provider}")
+    key = key.strip()
+    if len(key) < 10 or any(c.isspace() for c in key):
+        raise ValueError("That does not look like an API key. Copy it again from the provider's website.")
+    path = _workspace_env()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    keep = []
+    if path.exists():
+        keep = [l for l in path.read_text().splitlines()
+                if not any(l.strip().removeprefix("export ").startswith(k + "=") for k in KEYS.values())
+                and not l.strip().startswith("TALLISOR_LLM_")]
+    keep += [f"TALLISOR_LLM_PROVIDER={provider}", f"{KEYS[provider]}={key}"]
+    path.write_text("\n".join(keep) + "\n")
+    os.chmod(path, 0o600)
+
+
+def remove_api_key() -> None:
+    path = _workspace_env()
+    if path.exists():
+        lines = [l for l in path.read_text().splitlines()
+                 if not any(l.strip().removeprefix("export ").startswith(k + "=") for k in KEYS.values())
+                 and not l.strip().startswith("TALLISOR_LLM_")]
+        path.write_text("\n".join(lines) + ("\n" if lines else ""))
 
 
 def _setting(name: str, dotenv: dict) -> str:

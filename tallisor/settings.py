@@ -17,7 +17,7 @@ PAYMENT_KINDS = ("weekly", "every 2 weeks", "monthly", "once")
 
 def default_profile(name: str = "My business", currency: str = "USD") -> dict:
     return {
-        "business": {"name": name, "country": "", "months_trading": 12, "reporting_currency": currency,
+        "business": {"name": name, "owner_name": "", "country": "", "months_trading": 12, "reporting_currency": currency,
                      "revenue_variation_estimate": 0.3, "dispute_rate_estimate": 0.005, "card_share_estimate": 1.0},
         "sales_date": "",
         "files": {},

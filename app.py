@@ -14,7 +14,7 @@ from tallisor import settings, store
 from tallisor.ingest import InputRejected, UnknownFormat
 from tallisor.mapping import FIELDS, LABELS, build_adapter, distinct, kind_suggestions, save_adapter, suggest
 from tallisor.report import build_workbook
-from tallisor.llm import from_env
+from tallisor.llm import from_env, remove_api_key, save_api_key
 from tallisor.money import fmt
 from tallisor.reconcile import CATEGORY_LABELS, TONE
 from tallisor.security.audit import verify_events
@@ -178,25 +178,21 @@ with st.sidebar:
     if st.session_state.get("upload_error"):
         st.error(st.session_state.pop("upload_error"))
     st.divider()
-    person = st.text_input("Your name (for the audit log)", value="Maya Chen", key="person")
+    _owner = (settings.load() or {}).get("business", {}).get("owner_name", "")
+    person = st.text_input("Your name", value=_owner, key="person", placeholder="Shown on every approval",
+                           help="Recorded in the audit log next to every decision you make.")
     role = st.selectbox("Your role", ["owner", "reviewer", "viewer"], key="role",
+                        format_func=lambda r: {"owner": "Owner", "reviewer": "Reviewer (accountant)",
+                                               "viewer": "Viewer (read only)"}[r],
                         help="Owners and reviewers can approve fixes. Viewers can only read. "
                              "Only owners can change settings and auto-approval rules.")
-    llm_name = from_env().name
-    if llm_name == "none":
-        cap("AI writing: off. Explanations come from fixed rules, so results are exact and identical every run.")
-        with st.expander("Turn on AI explanations"):
-            cap("Copy .env.example to .env in the project folder, add one API key (free: Gemini; paid: Anthropic or OpenAI) "
-                "and restart the app. The AI only writes the wording; every amount it states is checked against "
-                "the records, and it can never approve fixes or move money.")
+    _ai = from_env()
+    if _ai.name == "none":
+        cap("AI explanations: off. Turn them on in Settings.")
     else:
-        cap(f"AI writing: on ({llm_name}, {from_env().model}). Every amount it writes is checked against the records.")
-        if llm_name == "gemini":
-            cap("If this is a free Gemini key, Google may use what is sent to improve its products. Use it with "
-                "sample data; use a paid key for real customer files.")
-    if st.button("Test AI connection", key="ai_test", use_container_width=True):
-        ok, why = from_env().check()
-        (st.success if ok else st.error)(why)
+        cap(f"AI explanations: on ({ {'gemini': 'Google Gemini', 'anthropic': 'Anthropic Claude', 'openai': 'OpenAI'}[_ai.name] }).")
+
+person = person.strip() or "Owner"
 
 
 # ------------------------------------------------------------------ column mapping for unknown files
@@ -285,7 +281,7 @@ CCY = s.profile["business"].get("reporting_currency", "USD")
 # ------------------------------------------------------------------ header
 top_l, top_r = st.columns([3, 1])
 with top_l:
-    html_md(f"<div class='md-muted'>{s.profile['business']['name']} · sales of {r.sales_date or 'the period'} · "
+    html_md(f"<div class='md-muted'>{(s.profile['business']['name'] if s.profile['business']['name'] not in ('', 'My business') else 'Your business')} · sales of {r.sales_date or 'the period'} · "
                 f"bank statement {r.statement.date} · providers: {', '.join(r.providers)}"
                 f"{' · saved as run ' + st.session_state.run_id if st.session_state.get('run_id') else ''}</div>")
 with top_r:
@@ -464,7 +460,8 @@ with tabs[3]:
 with tabs[4]:
     md("Ask in plain words. The copilot plans its steps, runs only permitted tools, and answers from verified records.")
     examples = ["Why is my bank short?", "Can I make payroll?", "What financing fits?", "What needs my attention?",
-                "Explain NW-48242", "Approve all fixes", "Transfer $5,000 to my supplier"]
+                *([f"Explain {r.cases[0].ref}"] if r.cases else []), "Approve all fixes",
+                "Pay my supplier $5,000"]
     ex_cols = st.columns(4)
     clicked = None
     for i, q in enumerate(examples):
@@ -531,7 +528,10 @@ with tabs[6]:
         st.info("Only the owner can change settings.")
     biz, cash = prof["business"], prof["cash"]
     a1, a2, a3 = st.columns(3)
-    biz["name"] = a1.text_input("Business name", biz["name"], disabled=not owner, key="set_name")
+    biz["name"] = a1.text_input("Business name", "" if biz["name"] == "My business" else biz["name"],
+                                disabled=not owner, key="set_name", placeholder="Your company name")
+    biz["owner_name"] = a1.text_input("Your name", biz.get("owner_name", ""), disabled=not owner,
+                                      key="set_owner", placeholder="Shown on approvals and reports")
     cur = biz.get("reporting_currency", "USD")
     biz["reporting_currency"] = a2.selectbox("Reporting currency", CURRENCIES,
                                              index=CURRENCIES.index(cur) if cur in CURRENCIES else 0,
@@ -615,6 +615,46 @@ with tabs[6]:
                           format_func=lambda c: CATEGORY_LABELS[c], disabled=not owner, key="set_auto_cats")
     limit = g3.number_input("Up to amount", 0.0, 1000.0, rule.get("max_amount", 2000) / 100, step=5.0,
                             disabled=not owner, key="set_auto_max")
+
+    md("**AI explanations** (optional)")
+    cap("An AI model writes the explanations in plain language and understands more ways of asking the copilot. "
+        "It never calculates: every amount it writes is checked against your records, and it cannot approve "
+        "fixes or move money. Without it, explanations come from fixed rules.")
+    _cur = from_env()
+    _labels = {"gemini": "Google Gemini (free tier available)", "anthropic": "Anthropic Claude",
+               "openai": "OpenAI"}
+    _links = {"gemini": "https://aistudio.google.com/apikey", "anthropic": "https://console.anthropic.com/settings/keys",
+              "openai": "https://platform.openai.com/api-keys"}
+    h1, h2 = st.columns([1, 2])
+    ai_provider = h1.selectbox("Provider", list(_labels), format_func=_labels.get, disabled=not owner,
+                               index=list(_labels).index(_cur.name) if _cur.name in _labels else 0, key="ai_prov")
+    ai_key = h2.text_input("API key", type="password", disabled=not owner, key="ai_key",
+                           placeholder="Key saved" if _cur.name != "none" else "Paste your key",
+                           help="Stored only on this computer, readable by your user account only.")
+    cap(f"Get a key at {_links[ai_provider]}.")
+    if ai_provider == "gemini":
+        cap("On Gemini's free tier Google may use what is sent to improve its products and people may review it. "
+            "Fine for trying Tallisor; use a paid key for real customer files.")
+    k1, k2, k3, _ = st.columns([1, 1, 1, 2])
+    if k1.button("Save key", disabled=not owner, key="ai_save", use_container_width=True):
+        try:
+            if not ai_key.strip():
+                raise ValueError("Paste your API key first.")
+            save_api_key(ai_provider, ai_key)
+            ok, why = from_env().check()
+            st.session_state.ai_msg = (ok, why if ok else f"Key saved, but the test failed: {why}")
+        except ValueError as exc:
+            st.session_state.ai_msg = (False, str(exc))
+        st.rerun()
+    if k2.button("Test connection", disabled=_cur.name == "none", key="ai_test", use_container_width=True):
+        st.session_state.ai_msg = from_env().check()
+    if k3.button("Remove key", disabled=not owner or _cur.name == "none", key="ai_remove", use_container_width=True):
+        remove_api_key()
+        st.session_state.ai_msg = (True, "Key removed. Explanations now come from fixed rules.")
+        st.rerun()
+    if st.session_state.get("ai_msg"):
+        ok, why = st.session_state.ai_msg
+        (st.success if ok else st.error)(why)
 
     if st.button("Save settings", type="primary", disabled=not owner, key="set_save"):
         try:

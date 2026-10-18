@@ -57,3 +57,25 @@ def test_ai_check_reports_a_readable_reason_and_never_the_key():
     llm.complete_json = lambda s, u: (setattr(llm, "last_error", "HTTP 401: the API key is wrong or revoked."), None)[1]
     ok, why = llm.check()
     assert not ok and "401" in why and "sk-secret" not in why
+
+
+def test_ai_key_saved_from_settings_is_private_and_removable(monkeypatch):
+    import os, stat
+    from pathlib import Path
+    from tallisor.llm import from_env, remove_api_key, save_api_key
+    for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "TALLISOR_LLM_PROVIDER", "TALLISOR_LLM_MODEL"):
+        monkeypatch.delenv(k, raising=False)
+    env = Path(os.environ["TALLISOR_WORKSPACE"]) / ".env"
+    try:
+        save_api_key("gemini", "AIza-test-key-123456")
+        assert from_env().name == "gemini" and from_env().model == "gemini-3.8-flash"
+        assert stat.S_IMODE(env.stat().st_mode) == 0o600
+        save_api_key("anthropic", "sk-ant-test-1234567")          # switching replaces the old key
+        assert from_env().name == "anthropic" and "GEMINI_API_KEY" not in env.read_text()
+        remove_api_key()
+        assert from_env().name == "none"
+        import pytest
+        with pytest.raises(ValueError):
+            save_api_key("gemini", "short")
+    finally:
+        env.unlink(missing_ok=True)
