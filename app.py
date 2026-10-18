@@ -1,31 +1,43 @@
 """Tallisor web app.  Run:  streamlit run app.py"""
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
-import altair as alt
-import pandas as pd
 import streamlit as st
-
-from tallisor.agent import Copilot
-from tallisor.financing import DISCLAIMER, readiness_pack
-from tallisor import settings, store
-from tallisor.ingest import InputRejected, UnknownFormat
-from tallisor.mapping import FIELDS, LABELS, build_adapter, distinct, kind_suggestions, save_adapter, suggest
-from tallisor.report import build_workbook
-from tallisor.llm import from_env, remove_api_key, save_api_key
-from tallisor.money import fmt
-from tallisor.reconcile import CATEGORY_LABELS, TONE
-from tallisor.security.audit import verify_events
-from tallisor.security.policy import ACTIONS, PermissionDenied
-from tallisor.session import Session
 
 ROOT = Path(__file__).parent
 SAMPLE = ROOT / "sample_data" / "northwind"
-
 BRAND = ROOT / "assets" / "brand"
 st.set_page_config(page_title="Tallisor", page_icon=str(BRAND / "tallisor-mark-64.png"), layout="wide")
+LOGO_B64 = base64.b64encode((BRAND / "tallisor-logo.png").read_bytes()).decode()
+
+# Show something immediately: the heavy libraries below take a moment on first start.
+_splash = st.empty()
+if "s" not in st.session_state:
+    _splash.markdown(
+        f"<div style='display:flex;flex-direction:column;align-items:center;justify-content:center;"
+        f"height:60vh;gap:1rem'><img src='data:image/png;base64,{LOGO_B64}' style='width:260px'>"
+        f"<div style='color:#56655F;font-size:1rem'>Preparing your dashboard…</div></div>",
+        unsafe_allow_html=True)
+
+import altair as alt  # noqa: E402
+import pandas as pd  # noqa: E402
+
+from tallisor import settings, store  # noqa: E402
+from tallisor.agent import Copilot  # noqa: E402
+from tallisor.financing import DISCLAIMER, readiness_pack  # noqa: E402
+from tallisor.ingest import InputRejected, UnknownFormat  # noqa: E402
+from tallisor.llm import from_env, remove_api_key, save_api_key  # noqa: E402
+from tallisor.mapping import FIELDS, LABELS, build_adapter, distinct, kind_suggestions, save_adapter, suggest  # noqa: E402
+from tallisor.money import fmt  # noqa: E402
+from tallisor.reconcile import CATEGORY_LABELS, TONE  # noqa: E402
+from tallisor.report import build_workbook  # noqa: E402
+from tallisor.security.audit import verify_events  # noqa: E402
+from tallisor.security.policy import ACTIONS, PermissionDenied  # noqa: E402
+from tallisor.session import Session  # noqa: E402
+
 
 def md(text: str, **kw):
     """Markdown with literal dollar signs (Streamlit treats $...$ as maths)."""
@@ -52,9 +64,8 @@ def alert_html(a: dict) -> str:
 
 st.markdown("""
 <style>
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 :root { --accent:#0074FB; --ink:#031230; --short:#A8281F; --over:#0B8F84; --wait:#7D5200; }
-html, body, [class*="css"], .stMarkdown, .stButton button { font-family: "Plus Jakarta Sans", system-ui, sans-serif; }
+html, body, [class*="css"], .stMarkdown, .stButton button { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif; }
 h1, h2, h3, h4 { color: var(--ink); }
 [data-testid="stSidebarUserContent"] { padding-top: .5rem; }
 .block-container { padding-top: 3.2rem; max-width: 1200px; }
@@ -144,9 +155,7 @@ def try_start(files, sample_dir=None):
 
 
 with st.sidebar:
-    import base64
-    _logo = base64.b64encode((BRAND / "tallisor-logo.png").read_bytes()).decode()
-    st.markdown(f"<img src='data:image/png;base64,{_logo}' alt='Tallisor' "
+    st.markdown(f"<img src='data:image/png;base64,{LOGO_B64}' alt='Tallisor' "
                 f"style='width:210px;height:auto;display:block;margin:.2rem 0 .4rem;image-rendering:auto'>",
                 unsafe_allow_html=True)
     cap("Every payment, tallied to the cent.")
@@ -262,6 +271,7 @@ def mapping_screen(pm: dict):
         st.rerun()
 
 
+_splash.empty()
 if st.session_state.get("pending_map"):
     mapping_screen(st.session_state.pending_map)
     st.stop()
