@@ -17,7 +17,7 @@ Model: none. Runs: 3.
 | Verified cash vs bank balance | $28,781.02 vs $25,841.71 |
 | Forecast shortfall below safety floor | $30,174.86 |
 | Best-fit financing | Receivables financing |
-| Mean run time | 0.007 s |
+| Mean run time | 0.0074 s |
 
 ### Per category
 
