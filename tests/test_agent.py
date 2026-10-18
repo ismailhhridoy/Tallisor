@@ -47,3 +47,13 @@ def test_ai_model_is_off_without_a_key_and_found_from_a_private_env_file(monkeyp
         assert llm.name == "openai" and llm.model == "gpt-4o-mini"
     finally:
         env.unlink(missing_ok=True)
+
+
+def test_ai_check_reports_a_readable_reason_and_never_the_key():
+    from tallisor.llm.providers import AnthropicLLM, NullLLM
+    ok, why = NullLLM().check()
+    assert not ok and ".env" in why
+    llm = AnthropicLLM("claude-sonnet-5-5", "sk-secret-123")
+    llm.complete_json = lambda s, u: (setattr(llm, "last_error", "HTTP 401: the API key is wrong or revoked."), None)[1]
+    ok, why = llm.check()
+    assert not ok and "401" in why and "sk-secret" not in why

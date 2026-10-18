@@ -56,6 +56,7 @@ st.markdown("""
 :root { --accent:#0074FB; --ink:#031230; --short:#A8281F; --over:#0B8F84; --wait:#7D5200; }
 html, body, [class*="css"], .stMarkdown, .stButton button { font-family: "Plus Jakarta Sans", system-ui, sans-serif; }
 h1, h2, h3, h4 { color: var(--ink); }
+[data-testid="stSidebarUserContent"] { padding-top: .5rem; }
 .block-container { padding-top: 3.2rem; max-width: 1200px; }
 h1, h2, h3 { letter-spacing: -0.01em; }
 .md-big { font-size: 1.55rem; line-height: 1.3; font-weight: 600; margin: .2rem 0 .6rem; }
@@ -143,7 +144,11 @@ def try_start(files, sample_dir=None):
 
 
 with st.sidebar:
-    st.image(str(BRAND / "tallisor-logo.png"), width=200)
+    import base64
+    _logo = base64.b64encode((BRAND / "tallisor-logo.png").read_bytes()).decode()
+    st.markdown(f"<img src='data:image/png;base64,{_logo}' alt='Tallisor' "
+                f"style='width:210px;height:auto;display:block;margin:.2rem 0 .4rem;image-rendering:auto'>",
+                unsafe_allow_html=True)
     cap("Every payment, tallied to the cent.")
     source = st.radio("Data", [*SAMPLES, UPLOAD], key="source")
     uploaded = None
@@ -185,7 +190,10 @@ with st.sidebar:
                 "and restart the app. The AI only writes the wording; every amount it states is checked against "
                 "the records, and it can never approve fixes or move money.")
     else:
-        cap(f"AI writing: on ({llm_name}). Every amount it writes is checked against the records.")
+        cap(f"AI writing: on ({llm_name}, {from_env().model}). Every amount it writes is checked against the records.")
+    if st.button("Test AI connection", key="ai_test", use_container_width=True):
+        ok, why = from_env().check()
+        (st.success if ok else st.error)(why)
 
 
 # ------------------------------------------------------------------ column mapping for unknown files

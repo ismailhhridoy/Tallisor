@@ -26,9 +26,37 @@ TIMEOUT = 30
 class LLM:
     name = "none"
     model = ""
+    last_error = ""
 
     def complete_json(self, system: str, user: str) -> Optional[dict]:
         return None
+
+    def check(self) -> tuple[bool, str]:
+        """One tiny request to confirm the key, model and network work."""
+        if self.name == "none":
+            return False, "No API key found. Add one to the .env file in the project folder."
+        reply = self.complete_json('Reply with JSON only: {"ok": true}', "Connection test.")
+        if reply and reply.get("ok") is True:
+            return True, f"Connected to {self.name}, model {self.model}."
+        return False, self.last_error or "The model replied, but not in the expected format."
+
+
+def _explain(exc: Exception) -> str:
+    """A readable reason for a failed call, without ever including the key."""
+    import urllib.error
+    if isinstance(exc, urllib.error.HTTPError):
+        try:
+            body = json.loads(exc.read().decode() or "{}")
+            msg = (body.get("error") or {}).get("message") if isinstance(body.get("error"), dict) else body.get("error")
+        except Exception:
+            msg = ""
+        hint = {401: "the API key is wrong or revoked", 403: "the key has no access to this model",
+                404: "the model name was not found", 429: "rate limit or no credit left on the account",
+                400: "the request was refused"}.get(exc.code, "the provider returned an error")
+        return f"HTTP {exc.code}: {hint}." + (f" Provider says: {str(msg)[:200]}" if msg else "")
+    if isinstance(exc, urllib.error.URLError):
+        return f"Could not reach the provider ({exc.reason}). Check the internet connection."
+    return f"{type(exc).__name__}: {str(exc)[:200]}"
 
 
 class NullLLM(LLM):
@@ -69,7 +97,8 @@ class AnthropicLLM(LLM):
                         {"model": self.model, "max_tokens": 600, "temperature": 0, "system": system,
                          "messages": [{"role": "user", "content": user}]})
             return _parse_json("".join(b.get("text", "") for b in out.get("content", [])))
-        except Exception:
+        except Exception as exc:  # never raise: callers fall back to fixed rules
+            self.last_error = _explain(exc)
             return None
 
 
@@ -86,7 +115,8 @@ class OpenAILLM(LLM):
                         {"model": self.model, "temperature": 0, "response_format": {"type": "json_object"},
                          "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
             return _parse_json(out["choices"][0]["message"]["content"])
-        except Exception:
+        except Exception as exc:  # never raise: callers fall back to fixed rules
+            self.last_error = _explain(exc)
             return None
 
 
@@ -105,7 +135,8 @@ class GeminiLLM(LLM):
                          "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}})
             parts = out["candidates"][0]["content"]["parts"]
             return _parse_json("".join(p.get("text", "") for p in parts))
-        except Exception:
+        except Exception as exc:  # never raise: callers fall back to fixed rules
+            self.last_error = _explain(exc)
             return None
 
 
