@@ -1,4 +1,4 @@
-from mismatchdesk.agent import Copilot, classify
+from tallisor.agent import Copilot, classify
 
 
 def test_intent_understanding():
@@ -31,3 +31,19 @@ def test_answers_contain_verified_numbers(session):
     assert "chargeback" in case.answer.lower()
     pack = bot.ask("Prepare a readiness pack")
     assert "Draft" in pack.answer
+
+
+def test_ai_model_is_off_without_a_key_and_found_from_a_private_env_file(monkeypatch):
+    import os
+    from pathlib import Path
+    from tallisor.llm import from_env
+    for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "TALLISOR_LLM_PROVIDER", "TALLISOR_LLM_MODEL"):
+        monkeypatch.delenv(k, raising=False)
+    env = Path(os.environ["TALLISOR_WORKSPACE"]) / ".env"
+    try:
+        assert from_env().name == "none"
+        env.write_text("# private\nexport OPENAI_API_KEY='sk-test'\n")
+        llm = from_env()
+        assert llm.name == "openai" and llm.model == "gpt-4o-mini"
+    finally:
+        env.unlink(missing_ok=True)

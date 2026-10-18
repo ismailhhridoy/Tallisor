@@ -1,12 +1,13 @@
 """Minimal, dependency-free clients for hosted language models.
 
-The model is optional. With MD_LLM_PROVIDER unset (the default) Mismatch Desk
-uses deterministic explanations, so the product works offline and every test
-is reproducible. Set:
+The model is optional. With no API key (the default) Tallisor uses
+deterministic explanations, so the product works offline and every test is
+reproducible. To turn a model on, put one key in a .env file in the project
+folder (or export it):
 
-    MD_LLM_PROVIDER = anthropic | openai | gemini
-    MD_LLM_MODEL    = model name offered by that provider
-    ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY
+    ANTHROPIC_API_KEY=...   or   OPENAI_API_KEY=...   or   GEMINI_API_KEY=...
+    TALLISOR_LLM_PROVIDER=anthropic | openai | gemini   (optional)
+    TALLISOR_LLM_MODEL=<model name>                      (optional)
 
 Every call asks for JSON only. Any network error, timeout or malformed reply
 returns None and the caller falls back to the deterministic path.
@@ -16,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
+from pathlib import Path
 from typing import Optional
 
 TIMEOUT = 30
@@ -107,16 +109,50 @@ class GeminiLLM(LLM):
             return None
 
 
+KEYS = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY"}
+DEFAULT_MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-4o-mini", "gemini": "gemini-2.5-flash"}
+
+
+def _dotenv() -> dict:
+    """Read KEY=value lines from a private .env file, if there is one.
+
+    Looked for in the project folder and in the user's Tallisor workspace.
+    Values already set in the environment win. The file is never committed
+    (.gitignore lists it) and never logged.
+    """
+    found = {}
+    for path in (Path(__file__).resolve().parents[2] / ".env",
+                 Path(os.getenv("TALLISOR_WORKSPACE", Path.home() / ".tallisor")).expanduser() / ".env"):
+        try:
+            for line in path.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    found.setdefault(k.strip().removeprefix("export ").strip(), v.strip().strip('"').strip("'"))
+        except OSError:
+            continue
+    return found
+
+
+def _setting(name: str, dotenv: dict) -> str:
+    return (os.getenv(name) or dotenv.get(name) or "").strip()
+
+
 def from_env() -> LLM:
-    provider = os.getenv("MD_LLM_PROVIDER", "").strip().lower()
-    model = os.getenv("MD_LLM_MODEL", "").strip()
-    if provider == "anthropic" and os.getenv("ANTHROPIC_API_KEY"):
-        return AnthropicLLM(model or "claude-sonnet-4-5", os.environ["ANTHROPIC_API_KEY"])
-    if provider == "openai" and os.getenv("OPENAI_API_KEY"):
-        return OpenAILLM(model or "gpt-4o-mini", os.environ["OPENAI_API_KEY"])
-    if provider == "gemini" and os.getenv("GEMINI_API_KEY"):
-        return GeminiLLM(model or "gemini-2.5-flash", os.environ["GEMINI_API_KEY"])
-    return NullLLM()
+    """The configured model, or NullLLM (fixed-rule explanations) if none.
+
+    The provider is TALLISOR_LLM_PROVIDER if set; otherwise the first provider
+    whose API key is present (Anthropic, OpenAI, Gemini).
+    """
+    dotenv = _dotenv()
+    provider = _setting("TALLISOR_LLM_PROVIDER", dotenv).lower()
+    if not provider:
+        provider = next((p for p, k in KEYS.items() if _setting(k, dotenv)), "")
+    key = _setting(KEYS.get(provider, ""), dotenv) if provider in KEYS else ""
+    if not key:
+        return NullLLM()
+    model = _setting("TALLISOR_LLM_MODEL", dotenv) or DEFAULT_MODELS[provider]
+    return {"anthropic": AnthropicLLM, "openai": OpenAILLM, "gemini": GeminiLLM}[provider](model, key)
 
 
 class ScriptedLLM(LLM):

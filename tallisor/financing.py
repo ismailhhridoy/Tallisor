@@ -20,7 +20,7 @@ from pathlib import Path
 from .cashflow import Forecast
 from .money import fmt
 
-DISCLAIMER = ("Illustrative facility types for planning, not offers or advice. Mismatch Desk does not "
+DISCLAIMER = ("Illustrative facility types for planning, not offers or advice. Tallisor does not "
               "submit applications or share your data with lenders.")
 
 

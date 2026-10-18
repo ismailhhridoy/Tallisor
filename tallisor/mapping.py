@@ -1,4 +1,4 @@
-"""Teach Mismatch Desk a new file layout without writing code.
+"""Teach Tallisor a new file layout without writing code.
 
 When no adapter recognises a file, suggest() proposes which column holds each
 field (from column names and sample values), the user confirms or corrects it,

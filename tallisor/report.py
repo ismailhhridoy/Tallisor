@@ -67,7 +67,7 @@ def build_workbook(session) -> bytes:
         ("Open fixes", sum(c.status == "open" for c in r.cases)),
         ("Audit log head hash", s["audit_head"]),
     ]
-    ws.append(["Mismatch Desk report", ""])
+    ws.append(["Tallisor report", ""])
     ws["A1"].font = Font(bold=True, size=14)
     ws.append([])
     for label, value in rows:

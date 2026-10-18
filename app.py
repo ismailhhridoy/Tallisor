@@ -1,4 +1,4 @@
-"""Mismatch Desk web app.  Run:  streamlit run app.py"""
+"""Tallisor web app.  Run:  streamlit run app.py"""
 from __future__ import annotations
 
 import json
@@ -8,23 +8,24 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from mismatchdesk.agent import Copilot
-from mismatchdesk.financing import DISCLAIMER, readiness_pack
-from mismatchdesk import settings, store
-from mismatchdesk.ingest import InputRejected, UnknownFormat
-from mismatchdesk.mapping import FIELDS, LABELS, build_adapter, distinct, kind_suggestions, save_adapter, suggest
-from mismatchdesk.report import build_workbook
-from mismatchdesk.llm import from_env
-from mismatchdesk.money import fmt
-from mismatchdesk.reconcile import CATEGORY_LABELS, TONE
-from mismatchdesk.security.audit import verify_events
-from mismatchdesk.security.policy import ACTIONS, PermissionDenied
-from mismatchdesk.session import Session
+from tallisor.agent import Copilot
+from tallisor.financing import DISCLAIMER, readiness_pack
+from tallisor import settings, store
+from tallisor.ingest import InputRejected, UnknownFormat
+from tallisor.mapping import FIELDS, LABELS, build_adapter, distinct, kind_suggestions, save_adapter, suggest
+from tallisor.report import build_workbook
+from tallisor.llm import from_env
+from tallisor.money import fmt
+from tallisor.reconcile import CATEGORY_LABELS, TONE
+from tallisor.security.audit import verify_events
+from tallisor.security.policy import ACTIONS, PermissionDenied
+from tallisor.session import Session
 
 ROOT = Path(__file__).parent
 SAMPLE = ROOT / "sample_data" / "northwind"
 
-st.set_page_config(page_title="Mismatch Desk", page_icon=None, layout="wide")
+BRAND = ROOT / "assets" / "brand"
+st.set_page_config(page_title="Tallisor", page_icon=str(BRAND / "tallisor-mark-64.png"), layout="wide")
 
 def md(text: str, **kw):
     """Markdown with literal dollar signs (Streamlit treats $...$ as maths)."""
@@ -51,14 +52,17 @@ def alert_html(a: dict) -> str:
 
 st.markdown("""
 <style>
-:root { --accent:#0A5C4F; --short:#A8281F; --over:#1D4F8F; --wait:#7D5200; }
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+:root { --accent:#0074FB; --ink:#031230; --short:#A8281F; --over:#0B8F84; --wait:#7D5200; }
+html, body, [class*="css"], .stMarkdown, .stButton button { font-family: "Plus Jakarta Sans", system-ui, sans-serif; }
+h1, h2, h3, h4 { color: var(--ink); }
 .block-container { padding-top: 3.2rem; max-width: 1200px; }
 h1, h2, h3 { letter-spacing: -0.01em; }
 .md-big { font-size: 1.55rem; line-height: 1.3; font-weight: 600; margin: .2rem 0 .6rem; }
 .md-num { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
 .md-short { color: var(--short); } .md-over { color: var(--over); } .md-wait { color: var(--wait); }
 .md-pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:.78rem; font-weight:600; }
-.md-crit { background:#F5DFDC; color:#8A1F18; } .md-warn { background:#F3E6C6; color:#6B4700; } .md-info { background:#DCE7F6; color:#1D4F8F; }
+.md-crit { background:#F5DFDC; color:#8A1F18; } .md-warn { background:#F3E6C6; color:#6B4700; } .md-info { background:#DDEBFF; color:#0B4FB3; }
 .md-muted { color: #56655F; font-size: .9rem; }
 </style>
 """, unsafe_allow_html=True)
@@ -139,8 +143,8 @@ def try_start(files, sample_dir=None):
 
 
 with st.sidebar:
-    md("### Mismatch Desk")
-    cap("Governed finance copilot for small businesses")
+    st.image(str(BRAND / "tallisor-logo.png"), width=200)
+    cap("Every payment, tallied to the cent.")
     source = st.radio("Data", [*SAMPLES, UPLOAD], key="source")
     uploaded = None
     if source == UPLOAD:
@@ -174,14 +178,21 @@ with st.sidebar:
                         help="Owners and reviewers can approve fixes. Viewers can only read. "
                              "Only owners can change settings and auto-approval rules.")
     llm_name = from_env().name
-    cap(f"AI model: {'not configured, deterministic explanations' if llm_name == 'none' else llm_name}")
+    if llm_name == "none":
+        cap("AI writing: off. Explanations come from fixed rules, so results are exact and identical every run.")
+        with st.expander("Turn on AI explanations"):
+            cap("Copy .env.example to .env in the project folder, add one API key (Anthropic, OpenAI or Gemini) "
+                "and restart the app. The AI only writes the wording; every amount it states is checked against "
+                "the records, and it can never approve fixes or move money.")
+    else:
+        cap(f"AI writing: on ({llm_name}). Every amount it writes is checked against the records.")
 
 
 # ------------------------------------------------------------------ column mapping for unknown files
 def mapping_screen(pm: dict):
     role_key = ROLE_KEY[pm["role"]]
     what = {"processor": "payment provider report", "books": "sales export", "bank": "bank statement"}[role_key]
-    st.subheader(f"Teach Mismatch Desk this {what}")
+    st.subheader(f"Teach Tallisor this {what}")
     md(f"**{pm['name']}** has a layout we have not seen before. Tell us which column holds what, once. "
        f"Next time a file with these columns arrives it is read automatically.")
     st.dataframe(pd.DataFrame(pm["sample"][:5]), hide_index=True, use_container_width=True)
@@ -270,7 +281,7 @@ with top_r:
     if halted:
         st.error("Agent stopped (kill switch)")
     st.download_button("Excel report", build_workbook(s), key="dl_xlsx", use_container_width=True,
-                       file_name=f"mismatch_desk_{r.statement.date}.xlsx",
+                       file_name=f"tallisor_{r.statement.date}.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 if st.session_state.get("notice"):
     st.info(st.session_state.notice)
@@ -310,7 +321,7 @@ with tabs[0]:
             x=alt.X("Amount:Q", title=f"Effect on cash received ({CCY})"),
             y=alt.Y("Cause:N", sort="x", title=None, axis=alt.Axis(labelLimit=300)),
             color=alt.Color("Type:N", scale=alt.Scale(domain=["Money short", "Extra money", "On its way"],
-                                                      range=["#A8281F", "#3B7BD1", "#D9A441"]),
+                                                      range=["#A8281F", "#0CB7A6", "#D9A441"]),
                             legend=alt.Legend(orient="bottom", title=None)),
             tooltip=["Cause", "Reference", alt.Tooltip("Amount:Q", format=",.2f")],
         ).properties(height=40 * len(df) + 40)
@@ -324,7 +335,7 @@ with tabs[0]:
 # ------------------------------------------------------------------ review
 with tabs[1]:
     md("Each difference was investigated. Check the evidence and approve the fix. Nothing reaches your books "
-             "until a person approves it, and Mismatch Desk can never move money.")
+             "until a person approves it, and Tallisor can never move money.")
     if role == "viewer":
         st.info("You are signed in as a viewer and can read only.")
     for c in r.cases:
@@ -397,7 +408,7 @@ with tabs[2]:
              f"plus {fmt(fc.in_transit)} in transit, minus {fmt(fc.refunds_owed)} owed back to customers. "
              f"Weekly sales receipts assumed: {fmt(fc.weekly_sales)} ({fc.sales_basis}).")
     wdf = pd.DataFrame([{"Week of": w.start.isoformat(), "Cash at week end": w.closing / 100} for w in fc.weeks])
-    line = alt.Chart(wdf).mark_line(point=True, color="#0A5C4F").encode(
+    line = alt.Chart(wdf).mark_line(point=True, color="#0074FB").encode(
         x=alt.X("Week of:T", title=None), y=alt.Y("Cash at week end:Q", title=CCY),
         tooltip=[alt.Tooltip("Week of:T"), alt.Tooltip("Cash at week end:Q", format=",.2f")])
     floor = alt.Chart(pd.DataFrame({"y": [fc.floor / 100]})).mark_rule(color="#A8281F", strokeDash=[6, 4]).encode(y="y:Q")

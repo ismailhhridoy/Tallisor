@@ -8,10 +8,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 # Tests never touch the user's real workspace (custom adapters, saved runs).
-os.environ["MD_WORKSPACE"] = tempfile.mkdtemp(prefix="md-test-")
+os.environ["TALLISOR_WORKSPACE"] = tempfile.mkdtemp(prefix="md-test-")
 sys.path.insert(0, str(ROOT))
 
-from mismatchdesk.session import Session  # noqa: E402
+from tallisor.session import Session  # noqa: E402
 
 SAMPLE = ROOT / "sample_data" / "northwind"
 

@@ -1,10 +1,10 @@
-# Mismatch Desk: technical documentation
+# Tallisor: technical documentation
 
 FinTechathon 2026, International Track, Topic E (SME Finance Copilot). Version 0.1.0, 19 October 2026.
 
 ## 1. What the agent does
 
-Mismatch Desk is an AI agent that acts as a **digital employee for a small-business owner**. Given the business's own records, it completes a chain of real finance tasks:
+Tallisor is an AI agent that acts as a **digital employee for a small-business owner**. Given the business's own records, it completes a chain of real finance tasks:
 
 1. **Business financial analysis.** Reconciles the books against every payment provider's report and the bank statement, and explains each difference with evidence.
 2. **Cash-flow management with alerts.** Computes the *verified* cash position, forecasts 13 weeks, and raises alerts (cash floor breach, uncovered payroll, dispute deadlines, unpaid sales, refunds owed, late payouts, overdue invoices).
@@ -201,7 +201,7 @@ Other controls: default-deny for unknown actions; approval bound to the proposal
 
 ## 7. Evaluation
 
-`python -m mismatchdesk eval` runs the agent on the sandbox company Northwind Market (38 sales across a card processor and a regional wallet, a CAMT.053 bank statement, 8 seeded differences of 8 different kinds) and an attack suite. Metrics follow agent-benchmark practice: task success against a goal state and pass^k consistency (τ-bench), and utility under attack with attack success rate (AgentDojo).
+`python -m tallisor eval` runs the agent on the sandbox company Northwind Market (38 sales across a card processor and a regional wallet, a CAMT.053 bank statement, 8 seeded differences of 8 different kinds) and an attack suite. Metrics follow agent-benchmark practice: task success against a goal state and pass^k consistency (τ-bench), and utility under attack with attack success rate (AgentDojo).
 
 | Measure | Result |
 |---|---|
@@ -220,11 +220,11 @@ The evaluation is not a claim of real-world accuracy: the sandbox is synthetic a
 ```bash
 python -m pip install -r requirements.txt
 python -m pytest -q
-python -m mismatchdesk eval
+python -m tallisor eval
 python -m streamlit run app.py
 ```
 
-Docker: `docker build -t mismatch-desk . && docker run -p 8501:8501 mismatch-desk` (tests run during the build; the container runs as a non-root user). Streamlit usage statistics are disabled in `.streamlit/config.toml` so no data leaves the machine except calls to a model provider, if one is configured.
+Docker: `docker build -t tallisor . && docker run -p 8501:8501 tallisor` (tests run during the build; the container runs as a non-root user). Streamlit usage statistics are disabled in `.streamlit/config.toml` so no data leaves the machine except calls to a model provider, if one is configured.
 
 ## 9. Limitations
 

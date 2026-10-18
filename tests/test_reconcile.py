@@ -1,5 +1,5 @@
-from mismatchdesk.ingest import load_bank, load_processor
-from mismatchdesk.money import fee_cents, fmt, to_cents
+from tallisor.ingest import load_bank, load_processor
+from tallisor.money import fee_cents, fmt, to_cents
 
 
 def test_money_parsing_is_exact():
@@ -64,7 +64,7 @@ def test_every_fix_balances_and_corrects_exactly_the_difference(session):
 
 
 def test_proposal_ids_are_deterministic(session, sample_data):
-    from mismatchdesk.session import Session
+    from tallisor.session import Session
     again = Session.from_dir(sample_data).run()
     a = {c.ref: c.proposal.id for c in session.recon.cases if c.proposal}
     b = {c.ref: c.proposal.id for c in again.recon.cases if c.proposal}
@@ -72,7 +72,7 @@ def test_proposal_ids_are_deterministic(session, sample_data):
 
 
 def test_template_explanations_only_use_evidence_numbers(session):
-    from mismatchdesk.security.guard import verify_numbers
+    from tallisor.security.guard import verify_numbers
     for c in session.recon.cases:
         ok, bad, _ = verify_numbers(c.explanation, c.allowed_numbers)
         assert ok, (c.id, bad, c.explanation)

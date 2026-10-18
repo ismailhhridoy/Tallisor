@@ -12,10 +12,10 @@ test:
 	$(PY) -m pytest -q
 
 eval:
-	$(PY) -m mismatchdesk eval --k 3
+	$(PY) -m tallisor eval --k 3
 
 run:
-	$(PY) -m mismatchdesk run
+	$(PY) -m tallisor run
 
 app:
 	$(PY) -m streamlit run app.py

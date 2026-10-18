@@ -9,7 +9,7 @@ Send to: wangyr@pbcsf.tsinghua.edu.cn (address taken from the official guideline
 | # | Deliverable | File | Status |
 |---|---|---|---|
 | 1 | Technical documentation (architecture, core algorithm, security design) | `docs/TECHNICAL_DOCUMENTATION.md` (export to PDF) | Ready |
-| 2 | Presentation deck, 10 minutes or less | Slides artifact "Mismatch Desk FinTechathon deck" (download as PDF and PPTX) | Ready; fill in [Team name], members, university, GitHub link |
+| 2 | Presentation deck, 10 minutes or less | Slides artifact "Tallisor FinTechathon deck" (download as PDF and PPTX) | Ready; fill in [Team name], members, university, GitHub link |
 | 3 | Demo video, 5 minutes or less (optional, but also execution evidence) | record with `docs/DEMO_VIDEO_SCRIPT.md` | To record |
 | 4 | Source code with README, GitHub link, deployment instructions, test cases | this repository; `README.md`; `tests/` | Ready; push to a public GitHub repository |
 | 5 | Security self-assessment (permission tiers, known-risk list) | `docs/SECURITY_SELF_ASSESSMENT.md` (export to PDF) | Ready |
@@ -22,7 +22,7 @@ Also needed: the official registration form and both members' passport bio pages
 - [ ] Teammate confirmed as a full-time student at a university outside China
 - [ ] Registration form filled for both members; passports scanned
 - [ ] Repository pushed to GitHub as public; link added to README, deck cover and closing slide
-- [ ] `python -m pytest -q` and `python -m mismatchdesk eval` run once more after any change
+- [ ] `python -m pytest -q` and `python -m tallisor eval` run once more after any change
 - [ ] Deck placeholders replaced: [Team name], [Member 1], [Member 2], [University], [contact email], [your-account]
 - [ ] Video recorded, under 5 minutes, uploaded (YouTube unlisted or Google Drive with "anyone with the link"), link tested in a private window
 - [ ] PDFs exported: technical documentation, security self-assessment, deck
@@ -48,11 +48,11 @@ Kind regards,
 
 ## Draft email: submission (Monday evening, update Tuesday if needed)
 
-Subject: FinTechathon 2026 International Track submission: [Team name], Topic E, Mismatch Desk
+Subject: FinTechathon 2026 International Track submission: [Team name], Topic E, Tallisor
 
 Dear Ms Wang,
 
-Please find our submission for Topic E: SME Finance Copilot. Our entry, Mismatch Desk, is an AI agent that reconciles a small business's books, payment-provider reports and bank statement into a verified cash position, forecasts cash flow with alerts, and matches financing options to the verified need, under strict permission tiers.
+Please find our submission for Topic E: SME Finance Copilot. Our entry, Tallisor, is an AI agent that reconciles a small business's books, payment-provider reports and bank statement into a verified cash position, forecasts cash flow with alerts, and matches financing options to the verified need, under strict permission tiers.
 
 1. Technical documentation: attached (PDF)
 2. Presentation deck: attached (PDF)
@@ -61,7 +61,7 @@ Please find our submission for Topic E: SME Finance Copilot. Our entry, Mismatch
 5. Security self-assessment: attached (PDF)
 6. Execution evidence: the `evidence/` folder in the repository (scored evaluation report, hash-chained sandbox operation logs, copilot transcript) and the demo video
 
-To reproduce our results: `pip install -r requirements.txt`, then `python -m mismatchdesk eval`.
+To reproduce our results: `pip install -r requirements.txt`, then `python -m tallisor eval`.
 
 Kind regards,
 [Your name], on behalf of [Team name]

@@ -1,4 +1,4 @@
-# Mismatch Desk: security self-assessment
+# Tallisor: security self-assessment
 
 Permission-tier implementation and known-risk list. FinTechathon 2026, Topic E. Assessed 19 October 2026 against version 0.1.0.
 
@@ -79,7 +79,7 @@ Status: **Mitigated** = control in place and tested; **Partial** = control in pl
 | R14 | Model supply chain (provider changes model behaviour) | LLM03, ASI04 | Model name pinned by configuration; deterministic fallback; numeric guard independent of the model | Fallback is the evaluated default | Accepted | Model-written explanations may change quality without notice |
 | R15 | Rules mis-categorise an unusual real-world case | Model risk | Fixed precedence; `unexplained` and `residual` categories go to people; confidence shown | Gap identity test; residual case | Partial | Real provider data will contain patterns not in the sample |
 | R16 | Over-reliance on financing suggestions | ASI09 (trust exploitation), consumer protection | Labelled illustrative; reasons and exclusions shown; no application or data sharing | `test_financing_recommendation_is_explained` | Partial | An owner may still treat a suggestion as an offer; real deployment needs licensed partners and local rules |
-| R17 | Saved data on the owner's computer, or shared hosting | Availability, confidentiality | Single-user local deployment; runs saved only in the owner's workspace folder (`~/.mismatchdesk` or `MD_WORKSPACE`); uploaded file names sanitised before saving; telemetry disabled | `tests/test_user_features.py`, `.streamlit/config.toml` | Accepted for the prototype | Saved files are not encrypted; multi-tenant hosting needs authentication, encryption at rest and per-tenant isolation |
+| R17 | Saved data on the owner's computer, or shared hosting | Availability, confidentiality | Single-user local deployment; runs saved only in the owner's workspace folder (`~/.tallisor` or `TALLISOR_WORKSPACE`); uploaded file names sanitised before saving; telemetry disabled | `tests/test_user_features.py`, `.streamlit/config.toml` | Accepted for the prototype | Saved files are not encrypted; multi-tenant hosting needs authentication, encryption at rest and per-tenant isolation |
 | R18 | Standing auto-approval rule approves something it should not | ASI03 (privilege abuse), ASI09 | Off by default; owner only; acts with the owner's role, never the agent's; only high-confidence, flag-free fixes in four listed categories under an amount; logged with the rule and who set it; stops with the kill switch; approvals can be undone | `test_auto_approval_*` | Partial | A careless threshold still approves real entries; a second-person review of rule changes would help |
 | R19 | Wrong or planted column mapping changes how later files are read | LLM04-adjacent data poisoning, integrity | A mapping is created only by a person (owner or reviewer) on the mapping screen, never from file content; required fields enforced; every adapter used is named in the audit log | `tests/test_mapping.py` | Partial | Mappings are not versioned or reviewed by a second person |
 
@@ -87,7 +87,7 @@ MITRE ATLAS identifiers other than AML.T0051 (prompt injection) are not cited be
 
 ## 4. Attack-suite results
 
-From `evidence/eval_report.md` (`python -m mismatchdesk eval`):
+From `evidence/eval_report.md` (`python -m tallisor eval`):
 
 | # | Attack | Result |
 |---|---|---|
@@ -110,7 +110,7 @@ Attack success rate: 0% (14 of 14 blocked).
 
 ## 5. Compliance alignment
 
-| Expectation | How Mismatch Desk meets it |
+| Expectation | How Tallisor meets it |
 |---|---|
 | Human oversight of consequential AI actions (NFRA 2026 guidance on AI in banking; MAS AI Risk Management Guidelines 2026; HKMA) | People approve every change to the books; irreversible actions are outside the system; kill switch |
 | Labelling AI-generated content (China, in force 1 September 2025) | Model-written explanations are labelled "AI-generated, numbers verified by code" |

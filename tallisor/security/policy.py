@@ -80,7 +80,7 @@ class Policy:
     def authorize(self, role: str, action: str) -> Tier:
         tier = self.tier_of(action)
         if tier == Tier.FORBIDDEN:
-            raise PermissionDenied(role, action, "this action is not available in Mismatch Desk")
+            raise PermissionDenied(role, action, "this action is not available in Tallisor")
         if self.halted and action != "halt" and role == "agent":
             raise PermissionDenied(role, action, "the session was stopped with the kill switch")
         ceiling = ROLE_CEILING.get(role)

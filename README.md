@@ -1,10 +1,11 @@
-# Mismatch Desk
+<p><img src="assets/brand/tallisor-logo.png" alt="Tallisor" width="320"></p>
+
 
 **A governed finance copilot for small businesses.** It checks that the money a business expected actually reached its bank, explains every difference, forecasts cash, raises alerts, and matches financing options to the business's *verified* cash flow. A person approves every change to the books, and the system cannot move money.
 
 Entry for the 2026 Shenzhen International FinTech Competition (FinTechathon), International Track, **Topic E: SME Finance Copilot**.
 
-| Topic E requirement | Where it is in Mismatch Desk |
+| Topic E requirement | Where it is in Tallisor |
 |---|---|
 | Business financial analysis | Three-way reconciliation of books, payment providers and bank; every difference explained with evidence |
 | Cash-flow management with alerts | Verified cash position, 13-week forecast, alerts for floor breaches, payroll, disputes, unpaid sales, refunds owed, late payouts |
@@ -12,7 +13,7 @@ Entry for the 2026 Shenzhen International FinTech Competition (FinTechathon), In
 
 ## The problem it solves
 
-A shop's bank balance is the wrong number for decisions. Payouts are still on their way, card fees are taken before money arrives, refunds and disputes are missing from the books, and some payments never happened. Owners find out when payroll bounces. Mismatch Desk reconciles first, so cash planning and financing start from numbers that are proven.
+A shop's bank balance is the wrong number for decisions. Payouts are still on their way, card fees are taken before money arrives, refunds and disputes are missing from the books, and some payments never happened. Owners find out when payroll bounces. Tallisor reconciles first, so cash planning and financing start from numbers that are proven.
 
 ## Quick start (about 2 minutes)
 
@@ -20,18 +21,18 @@ Requires Python 3.10 or newer.
 
 ```bash
 git clone <this repository>
-cd mismatch-desk
+cd tallisor
 python -m pip install -r requirements.txt
 python -m pytest -q                 # 65 tests
-python -m mismatchdesk eval         # scored evaluation, writes evidence/
+python -m tallisor eval         # scored evaluation, writes evidence/
 python -m streamlit run app.py      # web app at http://localhost:8501
 ```
 
 Or with Docker (tests run during the build):
 
 ```bash
-docker build -t mismatch-desk .
-docker run -p 8501:8501 mismatch-desk
+docker build -t tallisor .
+docker run -p 8501:8501 tallisor
 ```
 
 With `make`: `make install test eval app`.
@@ -39,21 +40,22 @@ With `make`: `make install test eval app`.
 ### Command line
 
 ```bash
-python -m mismatchdesk run                          # reconcile the sample company and print results
-python -m mismatchdesk chat "Can I make payroll?"   # ask the copilot
-python -m mismatchdesk verify-log evidence/run_log.jsonl
-python -m mismatchdesk verify-log evidence/run_log_TAMPERED.jsonl   # exits 1: tampering detected
+python -m tallisor run                          # reconcile the sample company and print results
+python -m tallisor chat "Can I make payroll?"   # ask the copilot
+python -m tallisor verify-log evidence/run_log.jsonl
+python -m tallisor verify-log evidence/run_log_TAMPERED.jsonl   # exits 1: tampering detected
 ```
 
 ### Optional: connect an AI model
 
-The product runs fully without a model, using deterministic explanations; that is the default for reproducible tests. To have a model write the explanations and help classify chat requests:
+The product runs fully without a model, using fixed-rule explanations; that is the default, and the sidebar shows "AI writing: off". To have a model write the explanations and help classify chat requests, copy `.env.example` to `.env` in the project folder and add one key:
 
 ```bash
-export MD_LLM_PROVIDER=gemini        # or anthropic, openai
-export MD_LLM_MODEL=<model name>     # a model your provider offers
-export GEMINI_API_KEY=...            # or ANTHROPIC_API_KEY / OPENAI_API_KEY
+cp .env.example .env
+# then edit .env:  ANTHROPIC_API_KEY=...   (or OPENAI_API_KEY / GEMINI_API_KEY)
 ```
+
+Restart the app and the sidebar shows "AI writing: on". The provider is picked from whichever key is present; `TALLISOR_LLM_PROVIDER` and `TALLISOR_LLM_MODEL` override it. `.env` is in `.gitignore` and is never uploaded.
 
 Whatever the model writes, the categories, amounts and fixes still come from code, and any explanation containing an amount that is not in the evidence is rejected.
 
@@ -71,7 +73,7 @@ Whatever the model writes, the categories, amounts and fixes still come from cod
  Every step: permission check (T0-T3) and a hash-chained audit log entry.
 ```
 
-1. **Adapters** read each provider's own format. A card processor's balance report and a regional mobile wallet's settlement export look nothing alike (column names, day-first dates, negative commissions, positive settlement rows); each is described by a small JSON file in `mismatchdesk/adapters/`. ISO 20022 CAMT.053 bank statements are parsed natively. Adding a provider is configuration, not code.
+1. **Adapters** read each provider's own format. A card processor's balance report and a regional mobile wallet's settlement export look nothing alike (column names, day-first dates, negative commissions, positive settlement rows); each is described by a small JSON file in `tallisor/adapters/`. ISO 20022 CAMT.053 bank statements are parsed natively. Adding a provider is configuration, not code.
 2. **Matching** is plain code with integer cents. It keeps one identity for every run: *expected deposits minus money received equals the sum of the explained differences*. If anything is left over, a "residual" case is raised instead of silently dropped.
 3. **Investigation** categorises each difference (fee, refund, chargeback, exchange rate, duplicate charge, failed payment, unrecorded sale, payout in transit) by rule, and writes a plain explanation. A model may write the sentence; it cannot change the category or amounts.
 4. **Fixes** are balanced journal entries built from the case facts. Each must balance and must change the provider clearing account by exactly the difference found, or it is refused.
@@ -98,7 +100,7 @@ Full detail: [`docs/SECURITY_SELF_ASSESSMENT.md`](docs/SECURITY_SELF_ASSESSMENT.
 
 ## Evaluation (execution evidence)
 
-`python -m mismatchdesk eval` runs the agent three times on a sandbox company with a known answer key, plus 14 attacks, and writes [`evidence/eval_report.md`](evidence/eval_report.md). Current results:
+`python -m tallisor eval` runs the agent three times on a sandbox company with a known answer key, plus 14 attacks, and writes [`evidence/eval_report.md`](evidence/eval_report.md). Current results:
 
 - 8 of 8 seeded differences found with the exact category and amount; gap of $4,057.32 fully explained
 - 7 of 7 drafted fixes balance; goal state reached in every run (pass^3)
@@ -115,12 +117,12 @@ Full detail: [`docs/SECURITY_SELF_ASSESSMENT.md`](docs/SECURITY_SELF_ASSESSMENT.
 6. **Excel report**: Summary, Differences, Journal, Cash forecast, Alerts, Financing and Audit log sheets, amounts as numbers with SUM cross-checks.
 7. **Auto-approval rule** (off by default, owner only): approve high-confidence fixes in chosen categories (fee, FX, unrecorded refund, provider charge) at or under an amount. It acts in the owner's name, never the agent's; each approval is logged with the rule and who set it; it skips anything with a security flag and stops with the kill switch.
 
-Your data stays on your computer, in `~/.mismatchdesk` (set `MD_WORKSPACE` to use another folder).
+Your data stays on your computer, in `~/.tallisor` (set `TALLISOR_WORKSPACE` to use another folder).
 
 ## Repository layout
 
 ```
-mismatchdesk/          engine
+tallisor/          engine
   adapters/            provider and bank formats (JSON)
   security/            permission policy, guards, audit log
   llm/                 optional model clients (no SDK dependencies)

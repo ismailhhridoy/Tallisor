@@ -2,8 +2,8 @@
 download, SWIFT MT940 and a debit/credit bank CSV."""
 import json
 
-from mismatchdesk.ingest import load_bank, load_processor
-from mismatchdesk.session import Session
+from tallisor.ingest import load_bank, load_processor
+from tallisor.session import Session
 
 from conftest import ROOT
 

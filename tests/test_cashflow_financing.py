@@ -1,4 +1,4 @@
-from mismatchdesk.money import fmt
+from tallisor.money import fmt
 
 
 def test_verified_cash_differs_from_bank_balance(session):

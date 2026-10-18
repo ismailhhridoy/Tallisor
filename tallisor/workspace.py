@@ -1,6 +1,6 @@
 """Where a user's own data lives on their machine.
 
-    MD_WORKSPACE (default ~/.mismatchdesk)
+    TALLISOR_WORKSPACE (default ~/.tallisor)
         adapters/     column mappings the user created for their providers
         profile.json  the business's settings (fees, cash plan, invoices)
         runs/<id>/    each saved reconciliation: inputs, decisions, audit log
@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 def root() -> Path:
-    path = Path(os.getenv("MD_WORKSPACE", Path.home() / ".mismatchdesk")).expanduser()
+    path = Path(os.getenv("TALLISOR_WORKSPACE", Path.home() / ".tallisor")).expanduser()
     path.mkdir(parents=True, exist_ok=True)
     return path
 

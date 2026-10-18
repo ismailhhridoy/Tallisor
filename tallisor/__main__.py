@@ -1,9 +1,9 @@
 """Command line.
 
-    python -m mismatchdesk run      [DATA_DIR]       reconcile and print the summary
-    python -m mismatchdesk chat     "question"       ask the copilot
-    python -m mismatchdesk eval     [--k 3]          scored evaluation, writes evidence/
-    python -m mismatchdesk verify-log FILE           check an audit log's hash chain
+    python -m tallisor run      [DATA_DIR]       reconcile and print the summary
+    python -m tallisor chat     "question"       ask the copilot
+    python -m tallisor eval     [--k 3]          scored evaluation, writes evidence/
+    python -m tallisor verify-log FILE           check an audit log's hash chain
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ DEFAULT = ROOT / "sample_data" / "northwind"
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="mismatchdesk")
+    p = argparse.ArgumentParser(prog="tallisor")
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
     r.add_argument("data", nargs="?", default=str(DEFAULT))

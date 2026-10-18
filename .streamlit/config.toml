@@ -6,4 +6,5 @@ headless = true
 maxUploadSize = 5
 
 [theme]
-primaryColor = "#0A5C4F"
+primaryColor = "#0074FB"
+textColor = "#031230"

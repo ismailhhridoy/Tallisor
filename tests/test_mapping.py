@@ -1,8 +1,8 @@
 """Column mapping: an unknown provider file becomes readable without code."""
 import pytest
 
-from mismatchdesk.ingest import UnknownFormat, load_processor
-from mismatchdesk.mapping import build_adapter, kind_suggestions, save_adapter, suggest
+from tallisor.ingest import UnknownFormat, load_processor
+from tallisor.mapping import build_adapter, kind_suggestions, save_adapter, suggest
 
 WALLET = ("Trx ID,Date,Merchant Invoice,Trx Type,Amount,Charge,Settled,Batch,Remarks\n"
           "W001,25/10/2026 10:15,INV-77,Payment,500.00,-7.50,492.50,B-01,Wallet payment\n"

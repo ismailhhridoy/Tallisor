@@ -99,7 +99,7 @@ class Copilot:
     # -------------------------------------------------------------- refusals
     def _refusal(self, intent: str, exc: PermissionDenied) -> str:
         if intent == "move_money":
-            return ("I can't move money, pay anyone or issue refunds. Mismatch Desk has no access to do that, by design. "
+            return ("I can't move money, pay anyone or issue refunds. Tallisor has no access to do that, by design. "
                     "I can prepare the task and the amount so a person can do it in the provider or bank dashboard.")
         if intent == "submit_application":
             return ("I can't apply for financing or send your data to a lender. I can prepare a readiness summary "

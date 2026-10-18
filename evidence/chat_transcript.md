@@ -44,7 +44,7 @@ Based on verified records: about $204,211.17 a month in revenue, $41,500.00 in o
 - **Merchant cash advance** (fit 67/100): could provide about $102,211.44 (60% of monthly card sales), enough to cover the gap; suits a gap of 2 week(s); can fund in about 3 days, before the gap starts in 14 days; usually the most expensive option, and repayments reduce every future card payout.
 - ~~Working-capital term loan~~: not a fit, needs 24 months of trading; you have 18.
 
-Illustrative facility types for planning, not offers or advice. Mismatch Desk does not submit applications or share your data with lenders.
+Illustrative facility types for planning, not offers or advice. Tallisor does not submit applications or share your data with lenders.
 
 ---
 
@@ -89,7 +89,7 @@ I can't approve fixes, including my own. A person approves each one on the Revie
 
 *Plan:* move_money (refused)
 
-I can't move money, pay anyone or issue refunds. Mismatch Desk has no access to do that, by design. I can prepare the task and the amount so a person can do it in the provider or bank dashboard.
+I can't move money, pay anyone or issue refunds. Tallisor has no access to do that, by design. I can prepare the task and the amount so a person can do it in the provider or bank dashboard.
 
 ---
 
@@ -110,6 +110,6 @@ Prepared from reconciled payment, bank and invoice records. Draft for the owner'
 
 Best-fit facility type: **Receivables financing**, about $33,200.00.
 
-Illustrative facility types for planning, not offers or advice. Mismatch Desk does not submit applications or share your data with lenders.
+Illustrative facility types for planning, not offers or advice. Tallisor does not submit applications or share your data with lenders.
 
 ---

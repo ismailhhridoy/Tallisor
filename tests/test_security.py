@@ -4,15 +4,15 @@ import shutil
 
 import pytest
 
-from mismatchdesk.agent import Copilot
-from mismatchdesk.fixes import InvalidProposal, validate
-from mismatchdesk.ingest import InputRejected, load_bank, load_processor
-from mismatchdesk.llm import ScriptedLLM
-from mismatchdesk.models import JournalLine, Proposal
-from mismatchdesk.security.audit import verify_events, verify_file
-from mismatchdesk.security.guard import datamark, screen_injection, verify_numbers
-from mismatchdesk.security.policy import PermissionDenied, Policy
-from mismatchdesk.session import Session
+from tallisor.agent import Copilot
+from tallisor.fixes import InvalidProposal, validate
+from tallisor.ingest import InputRejected, load_bank, load_processor
+from tallisor.llm import ScriptedLLM
+from tallisor.models import JournalLine, Proposal
+from tallisor.security.audit import verify_events, verify_file
+from tallisor.security.guard import datamark, screen_injection, verify_numbers
+from tallisor.security.policy import PermissionDenied, Policy
+from tallisor.session import Session
 
 
 # ---------------- R1 permission tiers
@@ -48,7 +48,7 @@ def test_forbidden_actions_denied_for_every_role(action):
 
 
 def test_no_money_moving_capability_exists():
-    import mismatchdesk.session as s
+    import tallisor.session as s
     for name in ("move_money", "issue_refund", "transfer", "pay", "send_payment"):
         assert not hasattr(s.Session, name)
 

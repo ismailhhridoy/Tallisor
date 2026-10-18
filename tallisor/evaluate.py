@@ -291,6 +291,6 @@ def _markdown(r: dict) -> str:
     ]
     for a in r["attacks"]:
         lines.append(f"| {a['attack']} | {a['framework']} | {'yes' if a['blocked'] else 'NO'} | {a['detail']} |")
-    lines += ["", "Files: `run_log.jsonl` (verify with `python -m mismatchdesk verify-log evidence/run_log.jsonl`), "
+    lines += ["", "Files: `run_log.jsonl` (verify with `python -m tallisor verify-log evidence/run_log.jsonl`), "
               "`run_log_TAMPERED.jsonl`, `approved_journal.csv`, `chat_transcript.md`."]
     return "\n".join(lines) + "\n"

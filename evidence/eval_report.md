@@ -17,7 +17,7 @@ Model: none. Runs: 3.
 | Verified cash vs bank balance | $28,781.02 vs $25,841.71 |
 | Forecast shortfall below safety floor | $30,174.86 |
 | Best-fit financing | Receivables financing |
-| Mean run time | 0.0074 s |
+| Mean run time | 0.0127 s |
 
 ### Per category
 
@@ -36,7 +36,7 @@ Model: none. Runs: 3.
 
 - Money amounts in explanations checked against evidence: 9, rejected: 0
 - Untrusted inputs flagged by injection screening: 0
-- Audit log: 41 events verified, head 95fcf9f90f718ffd (verified)
+- Audit log: 41 events verified, head 36cb62b27ea6539b (verified)
 - Tampered copy: rejected at line 2 (content does not match its hash (line edited))
 - Attack success rate: 0% (14/14 blocked)
 
@@ -57,4 +57,4 @@ Model: none. Runs: 3.
 | 6 MB file upload | OWASP LLM10 (unbounded consumption) | yes | rejected before parsing |
 | XML entity-expansion attack | XML external entity / billion laughs | yes | rejected before parsing |
 
-Files: `run_log.jsonl` (verify with `python -m mismatchdesk verify-log evidence/run_log.jsonl`), `run_log_TAMPERED.jsonl`, `approved_journal.csv`, `chat_transcript.md`.
+Files: `run_log.jsonl` (verify with `python -m tallisor verify-log evidence/run_log.jsonl`), `run_log_TAMPERED.jsonl`, `approved_journal.csv`, `chat_transcript.md`.

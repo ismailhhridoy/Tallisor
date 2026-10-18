@@ -5,10 +5,10 @@ import json
 import pytest
 from openpyxl import load_workbook
 
-from mismatchdesk import settings, store
-from mismatchdesk.report import build_workbook
-from mismatchdesk.security.policy import PermissionDenied
-from mismatchdesk.session import Session
+from tallisor import settings, store
+from tallisor.report import build_workbook
+from tallisor.security.policy import PermissionDenied
+from tallisor.session import Session
 
 REAL = __import__("pathlib").Path(__file__).resolve().parents[1] / "sample_data" / "realformats"
 
