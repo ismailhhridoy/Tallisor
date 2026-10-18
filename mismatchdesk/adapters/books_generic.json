@@ -1,0 +1,17 @@
+{
+  "name": "Accounting export (sales invoices)",
+  "role": "books",
+  "description": "Sales invoice export from an accounting system.",
+  "signature": ["invoice_no", "customer", "amount"],
+  "columns": {
+    "ref": "invoice_no",
+    "date": "date",
+    "customer": "customer",
+    "channel": "paid_via",
+    "currency": "currency",
+    "amount": "amount",
+    "amount_usd": "amount_usd",
+    "fx_rate": "fx_rate",
+    "status": "status"
+  }
+}

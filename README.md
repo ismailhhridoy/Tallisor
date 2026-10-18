@@ -1,0 +1,141 @@
+# Mismatch Desk
+
+**A governed finance copilot for small businesses.** It checks that the money a business expected actually reached its bank, explains every difference, forecasts cash, raises alerts, and matches financing options to the business's *verified* cash flow. A person approves every change to the books, and the system cannot move money.
+
+Entry for the 2026 Shenzhen International FinTech Competition (FinTechathon), International Track, **Topic E: SME Finance Copilot**.
+
+| Topic E requirement | Where it is in Mismatch Desk |
+|---|---|
+| Business financial analysis | Three-way reconciliation of books, payment providers and bank; every difference explained with evidence |
+| Cash-flow management with alerts | Verified cash position, 13-week forecast, alerts for floor breaches, payroll, disputes, unpaid sales, refunds owed, late payouts |
+| Financing-option matching | Rules-and-scoring engine over generic facility types, with sizing, a reason for each match and a reason for each exclusion |
+
+## The problem it solves
+
+A shop's bank balance is the wrong number for decisions. Payouts are still on their way, card fees are taken before money arrives, refunds and disputes are missing from the books, and some payments never happened. Owners find out when payroll bounces. Mismatch Desk reconciles first, so cash planning and financing start from numbers that are proven.
+
+## Quick start (about 2 minutes)
+
+Requires Python 3.10 or newer.
+
+```bash
+git clone <this repository>
+cd mismatch-desk
+python -m pip install -r requirements.txt
+python -m pytest -q                 # 43 tests
+python -m mismatchdesk eval         # scored evaluation, writes evidence/
+python -m streamlit run app.py      # web app at http://localhost:8501
+```
+
+Or with Docker (tests run during the build):
+
+```bash
+docker build -t mismatch-desk .
+docker run -p 8501:8501 mismatch-desk
+```
+
+With `make`: `make install test eval app`.
+
+### Command line
+
+```bash
+python -m mismatchdesk run                          # reconcile the sample company and print results
+python -m mismatchdesk chat "Can I make payroll?"   # ask the copilot
+python -m mismatchdesk verify-log evidence/run_log.jsonl
+python -m mismatchdesk verify-log evidence/run_log_TAMPERED.jsonl   # exits 1: tampering detected
+```
+
+### Optional: connect an AI model
+
+The product runs fully without a model, using deterministic explanations; that is the default for reproducible tests. To have a model write the explanations and help classify chat requests:
+
+```bash
+export MD_LLM_PROVIDER=gemini        # or anthropic, openai
+export MD_LLM_MODEL=<model name>     # a model your provider offers
+export GEMINI_API_KEY=...            # or ANTHROPIC_API_KEY / OPENAI_API_KEY
+```
+
+Whatever the model writes, the categories, amounts and fixes still come from code, and any explanation containing an amount that is not in the evidence is rejected.
+
+## How it works
+
+```
+ Books CSV ─┐
+ Card processor report ─┼─► Adapters ─► Matching engine ─► Cases ─► Investigator ─► Fix drafter ─► Human approval ─► Journal export
+ Wallet settlement report ─┤  (JSON)      (code only)               (AI optional,    (code, checked)    (T2, people)
+ Bank statement CAMT.053 ─┘                                          numbers checked)
+                                           │
+                                           ▼
+                         Verified cash ─► 13-week forecast ─► Alerts ─► Financing matching ─► Readiness summary (draft)
+
+ Every step: permission check (T0-T3) and a hash-chained audit log entry.
+```
+
+1. **Adapters** read each provider's own format. A card processor's balance report and a regional mobile wallet's settlement export look nothing alike (column names, day-first dates, negative commissions, positive settlement rows); each is described by a small JSON file in `mismatchdesk/adapters/`. ISO 20022 CAMT.053 bank statements are parsed natively. Adding a provider is configuration, not code.
+2. **Matching** is plain code with integer cents. It keeps one identity for every run: *expected deposits minus money received equals the sum of the explained differences*. If anything is left over, a "residual" case is raised instead of silently dropped.
+3. **Investigation** categorises each difference (fee, refund, chargeback, exchange rate, duplicate charge, failed payment, unrecorded sale, payout in transit) by rule, and writes a plain explanation. A model may write the sentence; it cannot change the category or amounts.
+4. **Fixes** are balanced journal entries built from the case facts. Each must balance and must change the provider clearing account by exactly the difference found, or it is refused.
+5. **Approval** is for people only, and is bound to the fix's content hash so nobody approves something different from what they saw.
+6. **Cash flow** starts from verified cash (bank plus payouts in transit minus refunds owed), not the bank balance.
+7. **Financing** uses those verified figures to check eligibility, size each option, score fit and explain exclusions. It is informational: nothing is sent to any lender.
+
+## Security, in one table
+
+| Control | Covers | Tested in |
+|---|---|---|
+| Permission tiers T0 read, T1 propose, T2 approve (people only), T3 not available | Excessive agency, self-approval (OWASP LLM06, ASI02, ASI09) | `tests/test_security.py` |
+| No money-moving code exists (capability absence) | Tool misuse (ASI02, ASI03) | same |
+| Plan fixed from the owner's message before any file text is read (Plan-Then-Execute) | Goal hijack (ASI01) | `tests/test_agent.py` |
+| Quarantined investigator, spotlighted file text, JSON-only output (Dual LLM) | Prompt injection (LLM01) | `tests/test_security.py` |
+| Every AI-stated amount checked against evidence | Hallucinated numbers (LLM09) | same |
+| Balanced, exact-size fixes only | Invalid outputs (LLM05) | same |
+| Approval bound to content hash | Approval integrity (ASI09) | same |
+| Hash-chained audit log with verifier | Tampering, accountability | same |
+| Kill switch | Rogue behaviour (ASI10) | same |
+| Size caps, safe XML parsing, DOCTYPE refused | Resource exhaustion (LLM10), XML attacks | same |
+
+Full detail: [`docs/SECURITY_SELF_ASSESSMENT.md`](docs/SECURITY_SELF_ASSESSMENT.md). Architecture: [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md).
+
+## Evaluation (execution evidence)
+
+`python -m mismatchdesk eval` runs the agent three times on a sandbox company with a known answer key, plus 14 attacks, and writes [`evidence/eval_report.md`](evidence/eval_report.md). Current results:
+
+- 8 of 8 seeded differences found with the exact category and amount; gap of $4,057.32 fully explained
+- 7 of 7 drafted fixes balance; goal state reached in every run (pass^3)
+- 14 of 14 attacks blocked (attack success rate 0%)
+- Audit log verifies; the deliberately tampered copy is rejected
+
+## Repository layout
+
+```
+mismatchdesk/          engine
+  adapters/            provider and bank formats (JSON)
+  security/            permission policy, guards, audit log
+  llm/                 optional model clients (no SDK dependencies)
+  ingest.py            file reading and normalisation
+  reconcile.py         matching and categorising
+  investigate.py       explanations (quarantined model + template)
+  fixes.py             journal entries and their checks
+  cashflow.py          verified cash, forecast, alerts
+  financing.py         financing-option matching
+  agent.py             chat copilot (intent, plan, execute)
+  session.py           workflow, permissions, audit trail
+  evaluate.py          scored evaluation and attack suite
+app.py                 web app
+data/                  illustrative financing facility types
+sample_data/northwind/ sandbox company (fictional) and its answer key
+scripts/make_sample.py regenerates the sandbox data
+tests/                 43 tests
+evidence/              evaluation report, audit logs, transcript, approved journal
+docs/                  technical documentation and security self-assessment
+```
+
+## Limits and honest notes
+
+- All companies, payment providers (PayRail, Swiftpay) and banks in the sample are fictional. Real provider formats need their own adapters.
+- Financing products are generic facility types with illustrative terms, not real offers. Recommending real lenders is regulated in several countries; the product stays informational.
+- The forecast is a simple direct method (8-week average sales, scheduled payments, invoices on their due date).
+- The web demo uses the sample company's cash plan, invoices and fee contracts when you upload your own files.
+- Only the deterministic path has been evaluated. Model-written explanations depend on the provider configured.
+
+License: MIT.

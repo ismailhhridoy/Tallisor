@@ -1,0 +1,46 @@
+{
+  "note": "Generic facility types with illustrative terms for demonstration. Not offers from any real lender.",
+  "products": [
+    {
+      "id": "receivables",
+      "name": "Receivables financing",
+      "description": "An advance against invoices your business customers have not paid yet. Repaid when they pay.",
+      "cost_text": "about 1.5-3% of the advance per month",
+      "term_text": "until the invoices are paid, typically 30-90 days",
+      "rules": {"min_months": 6, "min_receivables": 500000},
+      "sizing": {"basis": "receivables", "rate": 0.8},
+      "fit": {"max_gap_weeks": 13, "cost_rank": 2, "days_to_fund": 4}
+    },
+    {
+      "id": "revolving",
+      "name": "Revolving credit line",
+      "description": "A limit you can draw on and repay as needed. Interest only on what you use.",
+      "cost_text": "about 12-24% a year on the amount drawn",
+      "term_text": "renewed yearly",
+      "rules": {"min_months": 12, "min_monthly_revenue": 10000000, "max_chargeback_rate": 0.01},
+      "sizing": {"basis": "monthly_revenue", "rate": 0.25},
+      "fit": {"max_gap_weeks": 26, "cost_rank": 1, "days_to_fund": 14}
+    },
+    {
+      "id": "term_loan",
+      "name": "Working-capital term loan",
+      "description": "A fixed amount repaid in monthly instalments.",
+      "cost_text": "about 10-20% a year",
+      "term_text": "6-18 months",
+      "rules": {"min_months": 24, "min_monthly_revenue": 5000000, "max_volatility": 0.30},
+      "sizing": {"basis": "monthly_revenue", "rate": 1.0},
+      "fit": {"max_gap_weeks": 52, "cost_rank": 1, "days_to_fund": 21}
+    },
+    {
+      "id": "mca",
+      "name": "Merchant cash advance",
+      "description": "A lump sum repaid automatically from a share of future card sales.",
+      "cost_text": "a fixed fee of about 15-35% of the advance",
+      "term_text": "until repaid, typically 3-9 months",
+      "rules": {"min_months": 4, "min_card_monthly": 2000000},
+      "sizing": {"basis": "card_monthly", "rate": 0.6},
+      "fit": {"max_gap_weeks": 26, "cost_rank": 4, "days_to_fund": 3},
+      "caution": "usually the most expensive option, and repayments reduce every future card payout"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "PayRail balance report",
+  "provider": "PayRail",
+  "role": "processor",
+  "description": "Card processor balance report (Stripe-style balance transactions export). PayRail is fictional.",
+  "signature": ["id", "created", "reporting_category", "gross", "fee", "net"],
+  "columns": {
+    "txn_id": "id",
+    "ts": "created",
+    "kind": "reporting_category",
+    "ref": "order_id",
+    "gross": "gross",
+    "fee": "fee",
+    "net": "net",
+    "currency": "currency",
+    "exchange_rate": "exchange_rate",
+    "card_country": "card_country",
+    "payout_id": "payout_id",
+    "arrival_date": "arrival_date",
+    "memo": "description",
+    "evidence_due": "evidence_due_by",
+    "original_currency": "customer_currency",
+    "original_amount": "customer_amount"
+  },
+  "kind_map": {
+    "charge": "charge",
+    "refund": "refund",
+    "dispute": "dispute",
+    "dispute_fee": "dispute_fee",
+    "failed_charge": "failed",
+    "payout": "payout"
+  },
+  "date_format": "%Y-%m-%d %H:%M:%S",
+  "fee_sign": "positive",
+  "payout_sign": "negative"
+}

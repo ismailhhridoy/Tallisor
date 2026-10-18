@@ -1,0 +1,45 @@
+{
+  "gap": null,
+  "cases": [
+    {
+      "ref": "NW-48240",
+      "category": "fee_variance",
+      "variance": -1860
+    },
+    {
+      "ref": "NW-48241",
+      "category": "refund_unrecorded",
+      "variance": -8500
+    },
+    {
+      "ref": "NW-48242",
+      "category": "chargeback",
+      "variance": -62750
+    },
+    {
+      "ref": "NW-48243",
+      "category": "fx_difference",
+      "variance": -1651
+    },
+    {
+      "ref": "NW-48244",
+      "category": "duplicate_charge",
+      "variance": 12496
+    },
+    {
+      "ref": "NW-48245",
+      "category": "payment_failed",
+      "variance": -46092
+    },
+    {
+      "ref": "NW-48246",
+      "category": "unrecorded_sale",
+      "variance": 9456
+    },
+    {
+      "ref": "po_B_1009",
+      "category": "payout_in_transit",
+      "variance": -306831
+    }
+  ]
+}

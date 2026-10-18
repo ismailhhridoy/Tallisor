@@ -1,0 +1,29 @@
+{
+  "name": "Swiftpay wallet settlement report",
+  "provider": "Swiftpay",
+  "role": "processor",
+  "description": "Mobile-wallet merchant settlement export in a regional layout: day-first dates, negative commission column, settlement rows with a positive amount. Swiftpay is fictional.",
+  "signature": ["TrxID", "TxnDateTime", "MerchantRef", "TxnType", "NetAmt"],
+  "columns": {
+    "txn_id": "TrxID",
+    "ts": "TxnDateTime",
+    "kind": "TxnType",
+    "ref": "MerchantRef",
+    "gross": "GrossAmt",
+    "fee": "Commission",
+    "net": "NetAmt",
+    "currency": "Ccy",
+    "payout_id": "SettlementBatch",
+    "arrival_date": "ValueDate",
+    "memo": "Narration"
+  },
+  "kind_map": {
+    "SALE": "charge",
+    "REVERSAL": "refund",
+    "SETTLEMENT": "payout",
+    "FAILED": "failed"
+  },
+  "date_format": "%d/%m/%Y %H:%M",
+  "fee_sign": "negative",
+  "payout_sign": "positive"
+}

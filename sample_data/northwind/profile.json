@@ -1,0 +1,74 @@
+{
+  "business": {
+    "name": "Northwind Market",
+    "country": "Fictional",
+    "months_trading": 18,
+    "reporting_currency": "USD",
+    "sector": "Online retail and wholesale"
+  },
+  "sales_date": "2026-10-09",
+  "files": {
+    "books": "books.csv",
+    "processors": [
+      "payrail_balance_2026-10-09.csv",
+      "swiftpay_settlement_09102026.csv"
+    ],
+    "bank": "bank_statement_camt053.xml",
+    "history": "history.csv",
+    "receivables": "receivables.csv"
+  },
+  "fee_schedules": {
+    "PayRail": {
+      "home_country": "US",
+      "domestic": {
+        "bp": 290,
+        "fixed": 30
+      },
+      "international": {
+        "bp": 440,
+        "fixed": 30
+      }
+    },
+    "Swiftpay": {
+      "domestic": {
+        "bp": 150,
+        "fixed": 0
+      }
+    }
+  },
+  "cash": {
+    "forecast_start": "2026-10-12",
+    "weeks": 13,
+    "floor": 1500000,
+    "payments": [
+      {
+        "name": "Payroll",
+        "amount": 3800000,
+        "every_days": 14,
+        "first": "2026-10-23"
+      },
+      {
+        "name": "Supplier payments",
+        "amount": 2000000,
+        "every_days": 7,
+        "first": "2026-10-14"
+      },
+      {
+        "name": "Operating costs",
+        "amount": 400000,
+        "every_days": 7,
+        "first": "2026-10-15"
+      },
+      {
+        "name": "Rent",
+        "amount": 950000,
+        "monthly_day": 1
+      },
+      {
+        "name": "Holiday stock order",
+        "amount": 5200000,
+        "once": "2026-10-27"
+      }
+    ]
+  }
+}

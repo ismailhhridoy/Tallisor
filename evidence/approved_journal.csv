@@ -1,0 +1,20 @@
+date,case,reference,account,debit,credit,memo
+2026-10-10,C01,NW-48240,Payment processing fees,18.60,,Record the extra $18.60 fee as a processing cost.
+2026-10-10,C01,NW-48240,PayRail clearing,,18.60,Record the extra $18.60 fee as a processing cost.
+2026-10-10,C02,NW-48241,Sales refunds,85.00,,Record the $85.00 refund against NW-48241.
+2026-10-10,C02,NW-48241,PayRail clearing,,85.00,Record the $85.00 refund against NW-48241.
+2026-10-10,C03,NW-48242,Disputed charges receivable,612.50,,Move the sale to disputed charges and record the dispute fee.
+2026-10-10,C03,NW-48242,Dispute fees,15.00,,Move the sale to disputed charges and record the dispute fee.
+2026-10-10,C03,NW-48242,PayRail clearing,,627.50,Move the sale to disputed charges and record the dispute fee.
+2026-10-10,C04,NW-48243,Foreign exchange loss,17.00,,Record the exchange-rate difference and adjust the fee estimate.
+2026-10-10,C04,NW-48243,Payment processing fees,,0.49,Record the exchange-rate difference and adjust the fee estimate.
+2026-10-10,C04,NW-48243,PayRail clearing,,16.51,Record the exchange-rate difference and adjust the fee estimate.
+2026-10-10,C05,NW-48244,PayRail clearing,124.96,,Record the second charge of $129.00 as money owed back to the customer.
+2026-10-10,C05,NW-48244,Payment processing fees,4.04,,Record the second charge of $129.00 as money owed back to the customer.
+2026-10-10,C05,NW-48244,Refunds owed to customers,,129.00,Record the second charge of $129.00 as money owed back to the customer.
+2026-10-10,C06,NW-48245,Accounts receivable,475.00,,Reopen the invoice: the money was never collected.
+2026-10-10,C06,NW-48245,Payment processing fees,,14.08,Reopen the invoice: the money was never collected.
+2026-10-10,C06,NW-48245,PayRail clearing,,460.92,Reopen the invoice: the money was never collected.
+2026-10-10,C07,NW-48246,Swiftpay clearing,94.56,,Record the missing sale of $96.00.
+2026-10-10,C07,NW-48246,Payment processing fees,1.44,,Record the missing sale of $96.00.
+2026-10-10,C07,NW-48246,Sales revenue,,96.00,Record the missing sale of $96.00.

@@ -1,0 +1,13 @@
+{
+  "name": "Bank statement (CSV)",
+  "role": "bank",
+  "description": "Generic bank statement CSV. ISO 20022 CAMT.053 XML is parsed natively without an adapter.",
+  "signature": ["date", "amount", "reference"],
+  "columns": {
+    "txn_id": "id",
+    "date": "date",
+    "amount": "amount",
+    "reference": "reference",
+    "remittance_info": "details"
+  }
+}

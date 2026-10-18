@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr><MsgId>FMB-STMT-20261010</MsgId><CreDtTm>2026-10-10T07:00:00</CreDtTm></GrpHdr>
+    <Stmt>
+      <Id>STMT-0412</Id>
+      <CreDtTm>2026-10-10T07:00:00</CreDtTm>
+      <Acct><Id><Othr><Id>FMB-0412-778899</Id></Othr></Id><Ccy>USD</Ccy><Svcr><FinInstnId><Nm>First Meridian Bank</Nm></FinInstnId></Svcr></Acct>
+      <Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="USD">18400.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-10</Dt></Dt></Bal>
+      <Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="USD">25841.71</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-10</Dt></Dt></Bal>
+      <Ntry>
+        <NtryRef>FMB0412-01</NtryRef><Amt Ccy="USD">8969.03</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-10-10</Dt></BookgDt><ValDt><Dt>2026-10-10</Dt></ValDt><AcctSvcrRef>FMB0412-01</AcctSvcrRef>
+        <NtryDtls><TxDtls><Refs><EndToEndId>po_A_1009</EndToEndId></Refs><RmtInf><Ustrd>PAYRAIL PAYOUT po_A_1009</Ustrd></RmtInf></TxDtls></NtryDtls>
+      </Ntry>
+      <Ntry>
+        <NtryRef>FMB0412-02</NtryRef><Amt Ccy="USD">1672.68</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-10-10</Dt></BookgDt><ValDt><Dt>2026-10-10</Dt></ValDt><AcctSvcrRef>FMB0412-02</AcctSvcrRef>
+        <NtryDtls><TxDtls><Refs><EndToEndId>SWB-20261009</EndToEndId></Refs><RmtInf><Ustrd>SWIFTPAY SETTLEMENT SWB-20261009</Ustrd></RmtInf></TxDtls></NtryDtls>
+      </Ntry>
+      <Ntry>
+        <NtryRef>FMB0412-03</NtryRef><Amt Ccy="USD">3200.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-10-10</Dt></BookgDt><ValDt><Dt>2026-10-10</Dt></ValDt><AcctSvcrRef>FMB0412-03</AcctSvcrRef>
+        <NtryDtls><TxDtls><RmtInf><Ustrd>Harbor Print supplies invoice 5521</Ustrd></RmtInf></TxDtls></NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

@@ -1,0 +1,6 @@
+invoice,customer,amount,issued,due,status
+INV-2207,Harbor Hotels Group,18000.00,2026-09-10,2026-11-10,open
+INV-2211,Linden Office Supplies,14000.00,2026-09-20,2026-11-20,open
+INV-2216,Mesa Events Co,9500.00,2026-10-05,2026-12-05,open
+INV-2198,Fenwick Books Ltd,2400.00,2026-08-30,2026-09-30,open
+INV-2190,Okafor Studio,3100.00,2026-08-15,2026-09-15,paid

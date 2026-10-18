@@ -1,0 +1,39 @@
+invoice_no,date,customer,paid_via,currency,amount,amount_usd,fx_rate,status
+NW-48201,2026-10-09,Castillo Bikes,PayRail,USD,455.21,455.21,,paid
+NW-48202,2026-10-09,Castillo Bikes,PayRail,USD,72.97,72.97,,paid
+NW-48203,2026-10-09,Fenwick Books,PayRail,USD,536.78,536.78,,paid
+NW-48204,2026-10-09,Morrow Bakery,PayRail,USD,462.56,462.56,,paid
+NW-48205,2026-10-09,Ibarra Textiles,PayRail,USD,370.29,370.29,,paid
+NW-48206,2026-10-09,Linden Cycles,PayRail,USD,438.54,438.54,,paid
+NW-48207,2026-10-09,Rahman Electronics,PayRail,USD,313.35,313.35,,paid
+NW-48208,2026-10-09,Morrow Bakery,PayRail,USD,573.63,573.63,,paid
+NW-48209,2026-10-09,Marlow Garden Supply,PayRail,USD,321.23,321.23,,paid
+NW-48210,2026-10-09,Okafor Studio,PayRail,USD,288.06,288.06,,paid
+NW-48211,2026-10-09,Marlow Garden Supply,PayRail,USD,374.60,374.60,,paid
+NW-48212,2026-10-09,Mesa Coffee Roasters,PayRail,USD,429.30,429.30,,paid
+NW-48213,2026-10-09,Harbor Print Co,PayRail,USD,286.28,286.28,,paid
+NW-48214,2026-10-09,Adeyemi Foods,PayRail,USD,459.72,459.72,,paid
+NW-48215,2026-10-09,Haddad Spices,PayRail,USD,243.81,243.81,,paid
+NW-48216,2026-10-09,Tanaka Ceramics,PayRail,USD,489.92,489.92,,paid
+NW-48217,2026-10-09,Harbor Print Co,PayRail,USD,29.81,29.81,,paid
+NW-48218,2026-10-09,Mesa Coffee Roasters,PayRail,USD,365.43,365.43,,paid
+NW-48219,2026-10-09,Adeyemi Foods,PayRail,USD,517.98,517.98,,paid
+NW-48220,2026-10-09,Ibarra Textiles,PayRail,USD,109.84,109.84,,paid
+NW-48221,2026-10-09,Ibarra Textiles,PayRail,USD,67.32,67.32,,paid
+NW-48222,2026-10-09,Marlow Garden Supply,PayRail,USD,589.82,589.82,,paid
+NW-48223,2026-10-09,Haddad Spices,PayRail,USD,272.93,272.93,,paid
+NW-48224,2026-10-09,Mesa Coffee Roasters,PayRail,USD,476.17,476.17,,paid
+NW-48225,2026-10-09,Nguyen Tailoring,Swiftpay,USD,133.07,133.07,,paid
+NW-48226,2026-10-09,Ellery Stationers,Swiftpay,USD,296.63,296.63,,paid
+NW-48227,2026-10-09,Linden Cycles,Swiftpay,USD,242.84,242.84,,paid
+NW-48228,2026-10-09,Brightwell Dental,Swiftpay,USD,288.65,288.65,,paid
+NW-48229,2026-10-09,Chowdhury Crafts,Swiftpay,USD,160.23,160.23,,paid
+NW-48230,2026-10-09,Adeyemi Foods,Swiftpay,USD,215.35,215.35,,paid
+NW-48231,2026-10-09,Harbor Print Co,Swiftpay,USD,54.48,54.48,,paid
+NW-48232,2026-10-09,Mesa Coffee Roasters,Swiftpay,USD,210.90,210.90,,paid
+NW-48240,2026-10-09,Aalto Lighting,PayRail,USD,1240.00,1240.00,,paid
+NW-48241,2026-10-09,Juniper Florist,PayRail,USD,340.00,340.00,,paid
+NW-48242,2026-10-09,Greyfield Tools,PayRail,USD,612.50,612.50,,paid
+NW-48243,2026-10-09,Novak Optics,PayRail,EUR,2000.00,2180.00,1.0900,paid
+NW-48244,2026-10-09,Pinecrest Pets,PayRail,USD,129.00,129.00,,paid
+NW-48245,2026-10-09,Ridgeway Yoga,PayRail,USD,475.00,475.00,,paid
