@@ -44,7 +44,7 @@ SYNONYMS = {
     "ts": ["date", "created", "time", "date time", "transaction date", "txn date", "timestamp", "created at"],
     "kind": ["type", "transaction type", "txn type", "category", "reporting category", "event"],
     "fee": ["fee", "fees", "commission", "charge", "mdr", "processing fee", "service charge"],
-    "net": ["net", "net amount", "settled amount", "payable"],
+    "net": ["net", "net amount", "settled", "settled amount", "payable", "payout amount"],
     "currency": ["currency", "ccy", "cur"],
     "payout_id": ["payout id", "payout", "settlement id", "settlement batch", "batch", "batch id", "transfer id"],
     "arrival_date": ["arrival date", "settlement date", "value date", "payout date"],
