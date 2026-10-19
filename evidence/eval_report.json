@@ -182,8 +182,8 @@
     }
   ],
   "latency_seconds": {
-    "mean": 0.0127,
-    "max": 0.0145
+    "mean": 0.0105,
+    "max": 0.0133
   },
   "cost_usd_per_run": 0.0,
   "numbers": {
