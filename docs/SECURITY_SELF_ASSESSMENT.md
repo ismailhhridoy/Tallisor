@@ -44,7 +44,7 @@ Frameworks used for the risk list: OWASP Top 10 for LLM Applications 2025 (LLM01
 
 ### 2.3 Tests that prove it
 
-All in `tests/test_security.py` unless noted. `python -m pytest -q` runs 65 tests; all pass.
+All in `tests/test_security.py` unless noted. `python -m pytest -q` runs 69 tests; all pass.
 
 | Test | Proves |
 |---|---|
@@ -79,7 +79,7 @@ Status: **Mitigated** = control in place and tested; **Partial** = control in pl
 | R14 | Model supply chain (provider changes model behaviour) | LLM03, ASI04 | Model name pinned by configuration; deterministic fallback; numeric guard independent of the model | Fallback is the evaluated default | Accepted | Model-written explanations may change quality without notice |
 | R15 | Rules mis-categorise an unusual real-world case | Model risk | Fixed precedence; `unexplained` and `residual` categories go to people; confidence shown | Gap identity test; residual case | Partial | Real provider data will contain patterns not in the sample |
 | R16 | Over-reliance on financing suggestions | ASI09 (trust exploitation), consumer protection | Labelled illustrative; reasons and exclusions shown; no application or data sharing | `test_financing_recommendation_is_explained` | Partial | An owner may still treat a suggestion as an offer; real deployment needs licensed partners and local rules |
-| R17 | Saved data on the owner's computer, or shared hosting | Availability, confidentiality | Single-user local deployment; runs saved only in the owner's workspace folder (`~/.tallisor` or `TALLISOR_WORKSPACE`); uploaded file names sanitised before saving; telemetry disabled | `tests/test_user_features.py`, `.streamlit/config.toml` | Accepted for the prototype | Saved files are not encrypted; multi-tenant hosting needs authentication, encryption at rest and per-tenant isolation |
+| R17 | Saved data on the owner's computer, or shared hosting | Availability, confidentiality | Single-user local deployment; the public demo runs in hosted mode (`TALLISOR_HOSTED=1`), where each visitor gets a separate temporary workspace deleted after the session, the AI key comes only from server secrets and visitors are asked to use sample files; runs saved only in the owner's workspace folder (`~/.tallisor` or `TALLISOR_WORKSPACE`); uploaded file names sanitised before saving; telemetry disabled | `tests/test_user_features.py`, `.streamlit/config.toml` | Accepted for the prototype | Saved files are not encrypted; multi-tenant hosting needs authentication, encryption at rest and per-tenant isolation |
 | R18 | Standing auto-approval rule approves something it should not | ASI03 (privilege abuse), ASI09 | Off by default; owner only; acts with the owner's role, never the agent's; only high-confidence, flag-free fixes in four listed categories under an amount; logged with the rule and who set it; stops with the kill switch; approvals can be undone | `test_auto_approval_*` | Partial | A careless threshold still approves real entries; a second-person review of rule changes would help |
 | R19 | Wrong or planted column mapping changes how later files are read | LLM04-adjacent data poisoning, integrity | A mapping is created only by a person (owner or reviewer) on the mapping screen, never from file content; required fields enforced; every adapter used is named in the audit log | `tests/test_mapping.py` | Partial | Mappings are not versioned or reviewed by a second person |
 

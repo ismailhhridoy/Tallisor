@@ -1,6 +1,10 @@
 <p><img src="assets/brand/tallisor-logo.png" alt="Tallisor" width="320"></p>
 
 
+**See where every payment went.**
+
+**Live demo:** [tallisor.streamlit.app](https://tallisor.streamlit.app/) (opens with a fictional sample company; no sign-up)
+
 **A governed finance copilot for small businesses.** It checks that the money a business expected actually reached its bank, explains every difference, forecasts cash, raises alerts, and matches financing options to the business's *verified* cash flow. A person approves every change to the books, and the system cannot move money.
 
 Entry for the 2026 Shenzhen International FinTech Competition (FinTechathon), International Track, **Topic E: SME Finance Copilot**.
@@ -20,10 +24,10 @@ A shop's bank balance is the wrong number for decisions. Payouts are still on th
 Requires Python 3.10 or newer.
 
 ```bash
-git clone <this repository>
+git clone https://github.com/ismailhhridoy/tallisor.git
 cd tallisor
 python -m pip install -r requirements.txt
-python -m pytest -q                 # 65 tests
+python -m pytest -q                 # 69 tests
 python -m tallisor eval         # scored evaluation, writes evidence/
 python -m streamlit run app.py      # web app at http://localhost:8501
 ```
@@ -161,9 +165,10 @@ data/                  illustrative financing facility types
 sample_data/northwind/ sandbox company (fictional) and its answer key
 sample_data/realformats/ Stripe itemised balance, PayPal activity and MT940 layouts, with answer key
 scripts/make_sample.py regenerates the sandbox data
-tests/                 65 tests
+tests/                 69 tests
 evidence/              evaluation report, audit logs, transcript, approved journal
 docs/                  technical documentation and security self-assessment
+assets/brand/          logo files and colours
 ```
 
 ## Limits and honest notes
@@ -171,7 +176,7 @@ docs/                  technical documentation and security self-assessment
 - All companies in the samples are fictional. PayRail and Swiftpay are fictional providers; the Stripe, PayPal and MT940 sample files follow those formats' published layouts but contain made-up data. Real exports vary by account settings, which is what the mapping step is for.
 - Financing products are generic facility types with illustrative terms, not real offers. Recommending real lenders is regulated in several countries; the product stays informational.
 - The forecast is a simple direct method (8-week average sales, scheduled payments, invoices on their due date).
-- Single user on one computer. There are no logins, shared workspaces or hosted version yet; the role selector is for showing the permission model, not access control.
+- There are no user accounts or logins yet. The live demo is a public, per-visitor sandbox, and installed locally it is single-user; the role selector demonstrates the permission model and is not access control.
 - Only the deterministic path has been evaluated. Model-written explanations depend on the provider configured.
 
 License: MIT.
